@@ -2838,7 +2838,8 @@ function renderWeaponFilterSection() {
       groupSelect,
       [[-1, "指定しない"], ...prioritizedSkillOptions(GROUP_SKILLS, PRIORITY_GROUP_SKILL_INDICES)
         .map(([index, label]) => [index, skillLabelWithEffect(label)])],
-      entry.groupIndex,
+      // まだ何も指定していない武器種は、グループスキルの初期値をヌシの魂にしておく
+      hasWeaponSkillFilter(weaponType) ? entry.groupIndex : LORDS_SOUL_GROUP_INDEX,
     );
     groupLabel.append(groupSelect);
     attachGroupEffectNote(groupSelect);
@@ -2889,9 +2890,14 @@ function renderWeaponFilterSection() {
     groupSelect.addEventListener("change", save);
     seriesOptions.addEventListener("change", save);
     clearButton.addEventListener("click", () => {
-      groupSelect.value = "-1";
+      // クリア後も初期値（ヌシの魂）に戻し、この武器種は共通の条件で判定する
+      groupSelect.value = String(LORDS_SOUL_GROUP_INDEX);
+      groupSelect.dispatchEvent(new Event("change", { bubbles: false }));
       seriesOptions.querySelectorAll("input").forEach((c) => (c.checked = false));
-      groupSelect.dispatchEvent(new Event("change"));
+      delete weaponSkillFilters[weaponType];
+      persistWeaponSkillFilters();
+      state.textContent = "共通の条件を使用";
+      renderSkillPredictionTable();
     });
 
     const body = document.createElement("div");
