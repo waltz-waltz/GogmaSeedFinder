@@ -143,25 +143,6 @@ const GROUP_SKILL_EFFECTS = {
   "ヌシの魂": ["根性【果敢】", "HPのラインより上で致死ダメージを1回耐える。発動前は攻撃1.05倍・防御0.95倍、発動後は防御1.05倍・全耐性+3"],
 };
 
-// 武器種ごとのおすすめシリーズスキル（グループスキルはどの武器種もヌシの魂）
-// 攻略サイト（Game8・アルテマ・ゲームウィズ等）の情報を参考に要約。環境で変わることがある
-const WEAPON_SKILL_RECOMMENDATIONS = {
-  0: [["黒蝕竜の力", "雷顎竜の闘志"], "無我の境地で狂竜症を克服しやすく、手数の少ない大剣でも黒蝕一体の恩恵を受けやすい。雷顎竜の闘志は渾身の維持に"],
-  1: [["兇爪竜の力", "黒蝕竜の力"], "手数が多いので、連撃強化と噛み合う"],
-  2: [["千刃竜の闘志", "巨戟龍の黙示録", "黒蝕竜の力"], "回避が多いので巧撃を発動させやすい。属性特化なら巨戟龍の黙示録"],
-  3: [["海竜の渦雷", "雷顎竜の闘志", "黒蝕竜の力"], "海竜の渦雷で会心率を底上げ。見切り斬りのスタミナ消費を雷顎竜の闘志で補うと渾身を保ちやすい"],
-  4: [["雷顎竜の闘志", "黒蝕竜の力"], "溜め移動でスタミナを使うので、無尽蔵で渾身を保ちやすい"],
-  5: [["黒蝕竜の力"], "狩猟笛向けの情報は少なめのため、全武器共通で評価が高いものを採用"],
-  6: [["雷顎竜の闘志", "黒蝕竜の力"], "スタミナを維持しやすく、渾身による会心率アップの恩恵を受けやすい"],
-  7: [["兇爪竜の力", "黒蝕竜の力"], "砲撃などで連撃を発動させやすく、連撃強化と相性が良い"],
-  8: [["黒蝕竜の力", "巨戟龍の黙示録"], "属性値が高いので、巨戟龍の黙示録の属性アップが活きる"],
-  9: [["黒蝕竜の力", "巨戟龍の黙示録"], "属性特化型なら巨戟龍の黙示録と相性が良い"],
-  10: [["黒蝕竜の力", "巨戟龍の黙示録", "兇爪竜の力"], "「黒蝕＋ヌシ」が定番。属性重視なら巨戟龍の黙示録、連撃重視なら兇爪竜の力"],
-  11: [["黒蝕竜の力", "巨戟龍の黙示録"], "属性で戦う武器なので、巨戟龍の黙示録の属性アップが活きる"],
-  12: [["黒蝕竜の力", "巨戟龍の黙示録", "雷顎竜の闘志"], "黒蝕竜の力・巨戟龍の黙示録が定番。会心を伸ばすなら雷顎竜の闘志も上位候補"],
-  13: [["黒蝕竜の力", "巨戟龍の黙示録"], "黒蝕竜の力＋ヌシの魂の組み合わせが多くの記事で共通"],
-};
-
 function skillLabelWithEffect(label) {
   const effect = GROUP_SKILL_EFFECTS[label];
   return effect ? `${label}（${effect[0]}）` : label;
@@ -292,11 +273,6 @@ document.head.append(Object.assign(document.createElement("style"), {
     .weapon-filter-row > summary { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: baseline; padding: 10px 14px; cursor: pointer; }
     .weapon-filter-body .text-button { color: #ffffff; border-color: rgb(255 255 255 / 55%); }
     .weapon-filter-body .text-button:hover { color: #ffffff; border-color: #ffffff; }
-    /* 武器種ごとのおすすめ */
-    .weapon-recommendation { display: grid; gap: 6px; justify-items: start; padding: 10px 12px; border: 1px dashed #b8973f; border-radius: 8px; background: rgb(214 179 92 / 8%); }
-    .weapon-recommendation > strong { color: #e8c766; font-size: 0.85rem; }
-    .weapon-recommendation > p { margin: 0; color: #d6d3c5; font-size: 0.8rem; line-height: 1.6; }
-    .weapon-recommendation > small { color: #8f8c78; font-size: 0.7rem; }
     .weapon-filter-name { font-weight: 700; color: #e8c766; min-width: 7em; }
     .weapon-filter-state { color: #a9a690; font-size: 0.8rem; }
     .weapon-filter-body { display: grid; gap: 12px; padding: 4px 14px 14px; }
@@ -2926,31 +2902,6 @@ function renderWeaponFilterSection() {
 
     const body = document.createElement("div");
     body.className = "weapon-filter-body";
-    const recommendation = WEAPON_SKILL_RECOMMENDATIONS[weaponType];
-    if (recommendation) {
-      const [seriesNames, reason] = recommendation;
-      const box = document.createElement("div");
-      box.className = "weapon-recommendation";
-      const heading = document.createElement("strong");
-      heading.textContent = `おすすめ：ヌシの魂 ＋ ${seriesNames.join("／")}`;
-      const reasonText = document.createElement("p");
-      reasonText.textContent = `理由：${reason}`;
-      const applyButton = document.createElement("button");
-      applyButton.type = "button";
-      applyButton.className = "secondary small-button";
-      applyButton.textContent = "おすすめを入れる";
-      applyButton.addEventListener("click", () => {
-        groupSelect.value = String(LORDS_SOUL_GROUP_INDEX);
-        seriesOptions.querySelectorAll("input").forEach((c) => {
-          c.checked = seriesNames.includes(SERIES_SKILLS[Number(c.value)]);
-        });
-        groupSelect.dispatchEvent(new Event("change"));
-      });
-      const note = document.createElement("small");
-      note.textContent = "攻略サイト（Game8・アルテマ・ゲームウィズ等）の情報を参考に要約。アップデートなどで変わることがあります。";
-      box.append(heading, reasonText, applyButton, note);
-      body.append(box);
-    }
     body.append(groupLabel, seriesFieldset, clearButton);
     row.append(summary, body);
     return row;
