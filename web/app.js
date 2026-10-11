@@ -214,7 +214,31 @@ document.head.append(Object.assign(document.createElement("style"), {
     .skill-match-none { color: #777; font-size: 12px; }
     .skill-effect { display: block; color: #a9a690; font-size: 0.72rem; font-weight: 400; line-height: 1.5; margin-top: 2px; }
     .skill-effect > span { display: block; }
-    .group-effect-note { margin-top: 4px; }
+    .group-effect-note { margin-top: 6px; max-width: 760px; white-space: normal; }
+    /* シリーズスキルの選択欄：1つずつカードにして、説明が読めるようにする */
+    .skill-filter-series-options {
+      grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
+      gap: 8px;
+      max-height: 420px;
+      padding: 2px;
+    }
+    .weapon-filter-row .skill-filter-series-options { max-height: none; overflow: visible; }
+    .skill-filter-series-options label {
+      align-items: flex-start;
+      gap: 8px;
+      padding: 8px 10px;
+      border: 1px solid #3a3c31;
+      border-radius: 8px;
+      background: rgb(0 0 0 / 18%);
+      white-space: normal;
+      font-size: 0.8rem;
+      font-weight: 700;
+    }
+    .skill-filter-series-options label:has(input:checked) {
+      border-color: #e8c766;
+      background: rgb(214 179 92 / 12%);
+    }
+    .skill-filter-series-options input[type="checkbox"] { margin-top: 2px; }
     .weapon-filter-settings { display: block; }
     .weapon-filter-settings .skill-filter-intro p { margin: 4px 0 12px; color: #a9a690; font-size: 0.8rem; }
     .weapon-filter-empty { color: #a9a690; font-size: 0.8rem; }
@@ -223,7 +247,8 @@ document.head.append(Object.assign(document.createElement("style"), {
     .weapon-filter-name { font-weight: 700; color: #e8c766; min-width: 7em; }
     .weapon-filter-state { color: #a9a690; font-size: 0.8rem; }
     .weapon-filter-body { display: grid; gap: 12px; padding: 4px 14px 14px; }
-    .weapon-filter-body > label { display: grid; gap: 4px; max-width: 320px; }
+    .weapon-filter-body > label { display: grid; gap: 4px; }
+    .weapon-filter-body > label > select { max-width: 360px; }
   `,
 }));
 const STORAGE_KEY = "gogma-seed-finder-state-v1";
