@@ -99,6 +99,84 @@ const GROUP_SKILLS = [
   "ヌシの魂",
 ];
 
+// シリーズ・グループスキルで発動するスキルと効果のメモ（攻略大百科・Game8を参考に要約）
+// シリーズスキル：[発動スキル, 2部位の効果, 4部位の効果]
+const SERIES_SKILL_EFFECTS = {
+  "黒蝕竜の力": ["黒蝕一体", "大型モンスターと対峙すると狂竜症に感染する", "狂竜症に感染し、攻撃力UP。克服するとさらに攻撃力UP"],
+  "雷顎竜の闘志": ["無尽蔵", "追加のスタミナゲージを得る", "さらに長い追加のスタミナゲージを得る"],
+  "兇爪竜の力": ["連撃強化", "「連撃」発動時、効果時間を延長し基礎攻撃力+3", "効果時間をさらに延長し基礎攻撃力+10"],
+  "巨戟龍の黙示録": ["宣戦呼応", "戦闘中の大型モンスターが怒ると属性攻撃値UP", "上昇量がUPし、一定時間ダメージを防ぐ防壁を得る（再発動まで時間が必要）"],
+  "闢獣の力": ["力自慢", "鍔迫り合い・相殺の成功で一定時間、基礎攻撃力+10", "鍔迫り合い・相殺の成功で一定時間、基礎攻撃力+25"],
+  "火竜の力": ["灼熱化", "攻撃を当てると確率で追加の火属性ダメージ", "追加の火属性ダメージが上昇"],
+  "暗器蛸の力": ["蛮勇の食卓", "こんがり肉などを食べると一定時間、基礎攻撃力+15", "こんがり肉などを食べると一定時間、基礎攻撃力+25"],
+  "鎧竜の守護": ["無傷の重装", "体力が最大の時、受けるダメージ5%軽減", "体力が最大の時、受けるダメージ10%軽減"],
+  "雪獅子の闘志": ["ウォークライ", "ジェスチャー「雄叫び」で一定時間、周りの攻撃力が少しUP（オトモ・サポートハンターは効果大）", "周りの攻撃力UPが大きくなる"],
+  "波衣竜の守護": ["守護のヴェール", "特殊装具の使用で一定時間、防御力UP", "特殊装具の使用で一定時間、防御力と耐性値が大きくUP"],
+  "煌雷竜の力": ["雷々響鳴", "「力の解放」の発動時間を少し延長", "「力の解放」の発動時間を延長"],
+  "獄焔蛸の反逆": ["恨撃", "「逆恨み」発動中、追加で少しダメージ", "「逆恨み」発動中、追加でダメージ"],
+  "凍峰竜の反逆": ["束縛反攻", "糸拘束・凍結・拘束攻撃からの解放や鍔迫り合いの後、一定時間攻撃力UP", "同じ条件で攻撃力が大きくUP"],
+  "鎖刃竜の飢餓": ["加速再生", "攻撃を当て続けると体力が少し回復（武器種で回復量が変わる）", "攻撃を当て続けると体力が回復"],
+  "護鎖刃竜の命脈": ["破壊衝動", "大型モンスターの傷口を破壊すると体力が少し回復", "傷口を破壊すると体力が回復"],
+  "泡狐竜の力": ["泡沫の舞", "泡状態【大】にならず、泡状態の時に回避が強化", "さらに回避を何回か行うと泡状態【小】になる"],
+  "白熾龍の脈動": ["超回復力", "赤ゲージが無くても体力がゆるやかに最大まで自動回復", "自動回復がより速くなる"],
+  "海竜の渦雷": ["蒼雷一閃", "攻撃でダメージを蓄積させると追加の雷属性ダメージ＋一定時間会心率UP", "雷属性ダメージが上昇し、会心率UPの時間が少し延びる"],
+  "千刃竜の闘志": ["千刃の身躱し", "「巧撃」の効果時間を延長。発動中に再び条件を満たすと少し延長（1回のみ）", "さらに、発動中に再び条件を満たすと攻撃力UP"],
+  "暗黒騎士の証": ["ダークアーツ／ブラックナイト", "赤ゲージがある間、属性攻撃力UP。大剣の一部の溜め斬りが3段階溜めで強化", "特殊アクション「ブラックナイト」が使える"],
+  "オメガレゾナンス": ["レゾナンス", "ファーとニアーが交互に発動し、条件を満たすと攻撃力か会心率UP", "さらに武器スキル「シールドオプション」「連携プログラム」が強化"],
+};
+
+// グループスキル（3部位）：[発動スキル, 効果]
+const GROUP_SKILL_EFFECTS = {
+  "甲虫の知らせ": ["ハニーハンター", "ハチミツの採取数が増える"],
+  "甲虫の擬態": ["忍び歩き", "しゃがみ移動が速くなり、大型モンスターに見つかりにくい"],
+  "革細工の柔性": ["採集の達人", "採集が速くなり、採集・剥ぎ取り中に攻撃を受けてものけぞらない"],
+  "革細工の滑性": ["滑走強化", "地形を使ったスライディングの後、一定時間会心率UP"],
+  "鱗張りの技法": ["乗り名人", "モンスターに乗りやすく、乗りが成功しやすい"],
+  "鱗重ねの工夫": ["奮起", "体力40%以下で一定時間、スタミナ消費が減る"],
+  "毛皮の昂揚": ["不屈", "力尽きるたびに攻撃力と防御力UP（最大2回）"],
+  "毛皮の誘惑": ["陽動", "攻撃を当てるとモンスターの注意を強く引く"],
+  "ヌシの誇り": ["激励", "旋律など範囲効果を発動した時、一時的な攻撃力UPを追加"],
+  "ヌシの憤激": ["死中に活", "状態異常の間、基礎攻撃力+10（解除されると即終了）"],
+  "護竜の脈動": ["竜乳活性", "竜乳結晶の近くで赤ゲージとスタミナの回復が速くなる"],
+  "護竜の守り": ["竜都の護り", "竜都の跡形で属性ダメージ・特殊ダメージを軽減"],
+  "先達の導き": ["探索者の幸運", "活性化した採取ポイントが出やすくなる"],
+  "ヌシの魂": ["根性【果敢】", "HPのラインより上で致死ダメージを1回耐える。発動前は攻撃1.05倍・防御0.95倍、発動後は防御1.05倍・全耐性+3"],
+};
+
+function skillLabelWithEffect(label) {
+  const effect = GROUP_SKILL_EFFECTS[label];
+  return effect ? `${label}（${effect[0]}）` : label;
+}
+
+function skillEffectSpan(label) {
+  const effect = document.createElement("small");
+  effect.className = "skill-effect";
+  const series = SERIES_SKILL_EFFECTS[label];
+  if (series) {
+    const [skill, two, four] = series;
+    effect.append(
+      Object.assign(document.createElement("span"), { textContent: `発動スキル：${skill}` }),
+      Object.assign(document.createElement("span"), { textContent: `2部位：${two}` }),
+      Object.assign(document.createElement("span"), { textContent: `4部位：${four}` }),
+    );
+  }
+  return effect;
+}
+
+// グループスキルの選択欄の下に、選んだスキルの効果を表示する
+function attachGroupEffectNote(select) {
+  const note = document.createElement("small");
+  note.className = "skill-effect group-effect-note";
+  const update = () => {
+    const label = GROUP_SKILLS[Number(select.value)];
+    const effect = GROUP_SKILL_EFFECTS[label];
+    note.textContent = effect ? `発動スキル：${effect[0]}（3部位）　${effect[1]}` : "";
+  };
+  select.addEventListener("change", update);
+  update();
+  select.after(note);
+}
+
 const BOW_WEAPON_TYPE = 11;
 const HEAVY_BOWGUN_WEAPON_TYPE = 12;
 const BOWGUN_WEAPON_TYPES = new Set([12, 13]);
@@ -109,7 +187,45 @@ const LORDS_SOUL_GROUP_INDEX = 13;
 const PRIORITY_GROUP_SKILL_INDICES = [LORDS_SOUL_GROUP_INDEX];
 const PRIORITY_SERIES_SKILL_INDICES = [11, 6, 5, 18];
 const SKILL_COUNTER_GATE = 54;
-const MAX_REGISTERED_TARGETS = 16;
+const MAX_REGISTERED_TARGETS = 140;
+
+// 「一致」列の見た目
+document.head.append(Object.assign(document.createElement("style"), {
+  textContent: `
+    .skill-prediction-table { --match-column-width: 230px; }
+    .skill-match-cell { min-width: var(--match-column-width); vertical-align: top; }
+    /* 画面が広いときは「一致」列も左に固定して、横スクロールしても見えるようにする */
+    @media (min-width: 900px) {
+      .skill-prediction-table > thead > tr > th:nth-child(3),
+      .skill-prediction-table > tbody > tr > td:nth-child(3) {
+        position: sticky;
+        left: calc(var(--offset-column-width) + var(--state-column-width));
+        z-index: 2;
+        width: var(--match-column-width);
+        background: #151612;
+        box-shadow: 8px 0 12px rgb(0 0 0 / 20%);
+      }
+      .skill-prediction-table > thead > tr > th:nth-child(3) { z-index: 5; background: #20221c; }
+      .skill-prediction-table > tbody > tr > td:nth-child(2) { box-shadow: none; }
+    }
+    .skill-match-item { margin-bottom: 8px; }
+    .skill-match-item:last-child { margin-bottom: 0; }
+    .skill-match-name { font-size: 12px; font-weight: 700; color: #e8c766; margin-bottom: 4px; }
+    .skill-match-none { color: #777; font-size: 12px; }
+    .skill-effect { display: block; color: #a9a690; font-size: 0.72rem; font-weight: 400; line-height: 1.5; margin-top: 2px; }
+    .skill-effect > span { display: block; }
+    .group-effect-note { margin-top: 4px; }
+    .weapon-filter-settings { display: block; }
+    .weapon-filter-settings .skill-filter-intro p { margin: 4px 0 12px; color: #a9a690; font-size: 0.8rem; }
+    .weapon-filter-empty { color: #a9a690; font-size: 0.8rem; }
+    .weapon-filter-row { border: 1px solid #3a3c31; border-radius: 10px; margin-bottom: 8px; background: rgb(0 0 0 / 15%); }
+    .weapon-filter-row > summary { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: baseline; padding: 10px 14px; cursor: pointer; }
+    .weapon-filter-name { font-weight: 700; color: #e8c766; min-width: 7em; }
+    .weapon-filter-state { color: #a9a690; font-size: 0.8rem; }
+    .weapon-filter-body { display: grid; gap: 12px; padding: 4px 14px 14px; }
+    .weapon-filter-body > label { display: grid; gap: 4px; max-width: 320px; }
+  `,
+}));
 const STORAGE_KEY = "gogma-seed-finder-state-v1";
 
 const SAMPLE_OBSERVATIONS = [
@@ -275,9 +391,11 @@ populateSelect(skillTargetWeaponSelect, WEAPON_TYPES, 3);
 populateSelect(skillTargetAttributeSelect, ATTRIBUTES, 1);
 populateSelect(
   skillFilterGroupSelect,
-  [[-1, "指定しない"], ...prioritizedSkillOptions(GROUP_SKILLS, PRIORITY_GROUP_SKILL_INDICES)],
+  [[-1, "指定しない"], ...prioritizedSkillOptions(GROUP_SKILLS, PRIORITY_GROUP_SKILL_INDICES)
+    .map(([index, label]) => [index, skillLabelWithEffect(label)])],
   LORDS_SOUL_GROUP_INDEX,
 );
+attachGroupEffectNote(skillFilterGroupSelect);
 renderSkillFilterSeriesOptions(new Set([11]));
 const persistedAppState = loadPersistedAppState();
 let saveState = persistedAppState.saveState;
@@ -305,6 +423,10 @@ let predictionRequestId = 0;
 let comparisonRollSets = [];
 let comparisonRequestId = 0;
 let skillPredictionRollSets = [];
+// 武器種ごとの条件 { [weaponType]: { groupIndex, seriesIndices: number[] } }
+const WEAPON_SKILL_FILTERS_KEY = "gogma-seed-finder-weapon-filters-v1";
+let weaponSkillFilters = loadWeaponSkillFilters();
+let weaponFilterSection = null;
 let selectedSkillCounter = null;
 let skillObservedCount = 0;
 let currentSkillObservations = [];
@@ -613,6 +735,7 @@ function renderSkillFilterSeriesOptions(selectedIndices = new Set()) {
       checkbox.value = String(index);
       checkbox.checked = selectedIndices.has(index);
       text.textContent = label;
+      text.append(skillEffectSpan(label));
       optionLabel.append(checkbox, text);
       return optionLabel;
     }),
@@ -2189,6 +2312,7 @@ function renderComparisonTargets() {
   clearSkillTargetsButton.disabled = comparisonTargets.length === 0;
   renderKeepLayoutInputs();
   updateComparisonStatus();
+  renderWeaponFilterSection();
 }
 
 function readComparisonCount() {
@@ -2573,6 +2697,159 @@ function selectedSkillFilter() {
   };
 }
 
+function loadWeaponSkillFilters() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(WEAPON_SKILL_FILTERS_KEY) ?? "{}");
+    return saved && typeof saved === "object" ? saved : {};
+  } catch {
+    return {};
+  }
+}
+
+function persistWeaponSkillFilters() {
+  try {
+    localStorage.setItem(WEAPON_SKILL_FILTERS_KEY, JSON.stringify(weaponSkillFilters));
+  } catch {
+    // The app remains usable when storage is unavailable.
+  }
+}
+
+function hasWeaponSkillFilter(weaponType) {
+  const entry = weaponSkillFilters[weaponType];
+  return !!entry && (entry.groupIndex >= 0 || entry.seriesIndices.length > 0);
+}
+
+// 武器種ごとの条件があればそれを使う（グループとシリーズは常にAND）。なければ共通の条件
+function skillFilterForTarget(filter, target) {
+  if (!hasWeaponSkillFilter(target.weaponType)) return filter;
+  const entry = weaponSkillFilters[target.weaponType];
+  return {
+    ...filter,
+    groupIndex: entry.groupIndex,
+    operator: "and",
+    seriesIndices: new Set(entry.seriesIndices),
+  };
+}
+
+function renderWeaponFilterSection() {
+  if (!weaponFilterSection) {
+    weaponFilterSection = document.createElement("section");
+    weaponFilterSection.className = "skill-filter-settings weapon-filter-settings";
+    document.querySelector(".skill-filter-settings")?.after(weaponFilterSection);
+  }
+
+  const weaponTypes = [...new Set(comparisonTargets.map((target) => target.weaponType))]
+    .sort((a, b) => a - b);
+
+  const intro = document.createElement("div");
+  intro.className = "skill-filter-intro";
+  const title = document.createElement("strong");
+  title.textContent = "武器種ごとの条件";
+  const description = document.createElement("p");
+  description.textContent = "武器種ごとにグループスキルとシリーズスキルを指定できます。指定した武器種は「グループスキル かつ 選んだシリーズスキルのどれか」で判定し、上の共通の条件は使いません。何も指定していない武器種は共通の条件で判定します。";
+  intro.append(title, description);
+
+  if (weaponTypes.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "weapon-filter-empty";
+    empty.textContent = "武器を登録すると、ここに武器種ごとの設定欄が出ます。";
+    weaponFilterSection.replaceChildren(intro, empty);
+    return;
+  }
+
+  const rows = weaponTypes.map((weaponType) => {
+    const entry = weaponSkillFilters[weaponType] ?? { groupIndex: -1, seriesIndices: [] };
+    const row = document.createElement("details");
+    row.className = "weapon-filter-row";
+    row.open = hasWeaponSkillFilter(weaponType);
+
+    const summary = document.createElement("summary");
+    const name = document.createElement("span");
+    name.className = "weapon-filter-name";
+    name.textContent = t(optionName(WEAPON_TYPES, weaponType));
+    const state = document.createElement("span");
+    state.className = "weapon-filter-state";
+    state.textContent = hasWeaponSkillFilter(weaponType)
+      ? [
+          entry.groupIndex >= 0 ? GROUP_SKILLS[entry.groupIndex] : null,
+          entry.seriesIndices.length > 0 ? entry.seriesIndices.map((i) => SERIES_SKILLS[i]).join(" / ") : null,
+        ].filter(Boolean).join(" ＋ ")
+      : "共通の条件を使用";
+    summary.append(name, state);
+
+    const groupLabel = document.createElement("label");
+    groupLabel.textContent = "グループスキル";
+    const groupSelect = document.createElement("select");
+    populateSelect(
+      groupSelect,
+      [[-1, "指定しない"], ...prioritizedSkillOptions(GROUP_SKILLS, PRIORITY_GROUP_SKILL_INDICES)
+        .map(([index, label]) => [index, skillLabelWithEffect(label)])],
+      entry.groupIndex,
+    );
+    groupLabel.append(groupSelect);
+    attachGroupEffectNote(groupSelect);
+
+    const seriesFieldset = document.createElement("fieldset");
+    seriesFieldset.className = "skill-filter-series";
+    const legend = document.createElement("legend");
+    legend.textContent = "シリーズスキル（複数選択はOR）";
+    const seriesOptions = document.createElement("div");
+    seriesOptions.className = "skill-filter-series-options";
+    seriesOptions.append(
+      ...prioritizedSkillOptions(SERIES_SKILLS, PRIORITY_SERIES_SKILL_INDICES).map(([index, label]) => {
+        const optionLabel = document.createElement("label");
+        const checkbox = document.createElement("input");
+        const text = document.createElement("span");
+        checkbox.type = "checkbox";
+        checkbox.value = String(index);
+        checkbox.checked = entry.seriesIndices.includes(index);
+        text.textContent = label;
+        text.append(skillEffectSpan(label));
+        optionLabel.append(checkbox, text);
+        return optionLabel;
+      }),
+    );
+    seriesFieldset.append(legend, seriesOptions);
+
+    const clearButton = document.createElement("button");
+    clearButton.type = "button";
+    clearButton.className = "text-button";
+    clearButton.textContent = "この武器種の条件をクリア";
+
+    const save = () => {
+      const next = {
+        groupIndex: Number(groupSelect.value),
+        seriesIndices: [...seriesOptions.querySelectorAll("input:checked")].map((c) => Number(c.value)),
+      };
+      if (next.groupIndex >= 0 || next.seriesIndices.length > 0) weaponSkillFilters[weaponType] = next;
+      else delete weaponSkillFilters[weaponType];
+      persistWeaponSkillFilters();
+      state.textContent = hasWeaponSkillFilter(weaponType)
+        ? [
+            next.groupIndex >= 0 ? GROUP_SKILLS[next.groupIndex] : null,
+            next.seriesIndices.length > 0 ? next.seriesIndices.map((i) => SERIES_SKILLS[i]).join(" / ") : null,
+          ].filter(Boolean).join(" ＋ ")
+        : "共通の条件を使用";
+      renderSkillPredictionTable();
+    };
+    groupSelect.addEventListener("change", save);
+    seriesOptions.addEventListener("change", save);
+    clearButton.addEventListener("click", () => {
+      groupSelect.value = "-1";
+      seriesOptions.querySelectorAll("input").forEach((c) => (c.checked = false));
+      groupSelect.dispatchEvent(new Event("change"));
+    });
+
+    const body = document.createElement("div");
+    body.className = "weapon-filter-body";
+    body.append(groupLabel, seriesFieldset, clearButton);
+    row.append(summary, body);
+    return row;
+  });
+
+  weaponFilterSection.replaceChildren(intro, ...rows);
+}
+
 function skillRollMatchesFilter(roll, filter) {
   const hasGroup = filter.groupIndex >= 0;
   const hasSeries = filter.seriesIndices.size > 0;
@@ -2595,7 +2872,7 @@ function skillPredictionVisibility(filter = selectedSkillFilter()) {
   const count = skillPredictionRollSets[0].rolls.length;
   const allIndices = Array.from({ length: count }, (_, index) => index);
   const rowMatchesFilter = (index) => skillPredictionRollSets.some((target) =>
-    skillRollMatchesFilter(target.rolls[index], filter)
+    skillRollMatchesFilter(target.rolls[index], skillFilterForTarget(filter, target))
   );
   const matchingIndices = allIndices.filter(rowMatchesFilter);
   return {
@@ -2610,12 +2887,11 @@ function renderSkillPredictionTable() {
 
   const skillFilter = selectedSkillFilter();
   const highlightEnabled = skillHighlightEnabled.checked;
-  const isConditionMatch = (roll) => skillRollMatchesFilter(roll, skillFilter);
   const { count, matchingRowCount, visibleIndices } = skillPredictionVisibility(skillFilter);
-  const conditionMatchCount = skillPredictionRollSets.reduce(
-    (total, target) => total + target.rolls.filter(isConditionMatch).length,
-    0,
-  );
+  const conditionMatchCount = skillPredictionRollSets.reduce((total, target) => {
+    const targetFilter = skillFilterForTarget(skillFilter, target);
+    return total + target.rolls.filter((roll) => skillRollMatchesFilter(roll, targetFilter)).length;
+  }, 0);
 
   const filterStatus = skillFilter.enabled
     ? `・条件一致${matchingRowCount.toLocaleString("ja-JP")}行`
@@ -2634,9 +2910,13 @@ function renderSkillPredictionTable() {
   offsetHeader.textContent = "何回先";
   stateHeader.scope = "col";
   stateHeader.textContent = "保存後の状態";
+  const matchHeader = document.createElement("th");
+  matchHeader.scope = "col";
+  matchHeader.textContent = "一致";
   skillPredictionHeaderRow.replaceChildren(
     offsetHeader,
     stateHeader,
+    matchHeader,
     ...skillPredictionRollSets.map((target) => {
       const header = document.createElement("th");
       header.scope = "col";
@@ -2648,7 +2928,7 @@ function renderSkillPredictionTable() {
   if (visibleIndices.length === 0) {
     const row = document.createElement("tr");
     const cell = document.createElement("td");
-    cell.colSpan = 2 + skillPredictionRollSets.length;
+    cell.colSpan = 3 + skillPredictionRollSets.length;
     cell.className = "prediction-empty";
     cell.textContent = "指定したグループ・シリーズ条件に合う結果は表示範囲内にありません。表示回数を増やすか条件を変更してください。";
     row.append(cell);
@@ -2706,23 +2986,49 @@ function createSkillPredictionRow(index, skillFilter, highlightEnabled) {
   offsetCell.textContent = `${index + 1}回先`;
   row.append(offsetCell, createSavedStateCell("skill", index + 1, null, true));
 
+  // 条件に一致した武器を左側の「一致」列にまとめる
+  const matchCell = document.createElement("td");
+  matchCell.className = "skill-match-cell";
+  row.append(matchCell);
+
   for (const target of skillPredictionRollSets) {
     const roll = target.rolls[index];
     const cell = document.createElement("td");
-    const tags = document.createElement("div");
-    const seriesTag = document.createElement("span");
-    const groupTag = document.createElement("span");
-    const conditionMatch = highlightEnabled && skillRollMatchesFilter(roll, skillFilter);
-    tags.className = "skill-result-pair";
-    seriesTag.className = `skill-tag series${conditionMatch ? " desired" : ""}`;
-    seriesTag.textContent = SERIES_SKILLS[roll.seriesIndex] ?? `シリーズ ${roll.seriesIndex}`;
-    groupTag.className = `skill-tag group${conditionMatch ? " jackpot" : ""}`;
-    groupTag.textContent = GROUP_SKILLS[roll.groupIndex] ?? `グループ ${roll.groupIndex}`;
-    tags.append(seriesTag, groupTag);
-    cell.append(tags);
+    const conditionMatch = highlightEnabled && skillRollMatchesFilter(roll, skillFilterForTarget(skillFilter, target));
+    cell.append(createSkillResultPair(roll, conditionMatch));
     row.append(cell);
+
+    if (conditionMatch) {
+      const item = document.createElement("div");
+      const name = document.createElement("div");
+      item.className = "skill-match-item";
+      name.className = "skill-match-name";
+      name.textContent = comparisonTargetName(target);
+      item.append(name, createSkillResultPair(roll, true));
+      matchCell.append(item);
+    }
+  }
+
+  if (matchCell.childElementCount === 0) {
+    const none = document.createElement("span");
+    none.className = "skill-match-none";
+    none.textContent = "—";
+    matchCell.append(none);
   }
   return row;
+}
+
+function createSkillResultPair(roll, conditionMatch) {
+  const tags = document.createElement("div");
+  const seriesTag = document.createElement("span");
+  const groupTag = document.createElement("span");
+  tags.className = "skill-result-pair";
+  seriesTag.className = `skill-tag series${conditionMatch ? " desired" : ""}`;
+  seriesTag.textContent = SERIES_SKILLS[roll.seriesIndex] ?? `シリーズ ${roll.seriesIndex}`;
+  groupTag.className = `skill-tag group${conditionMatch ? " jackpot" : ""}`;
+  groupTag.textContent = GROUP_SKILLS[roll.groupIndex] ?? `グループ ${roll.groupIndex}`;
+  tags.append(seriesTag, groupTag);
+  return tags;
 }
 
 function clearSkillPredictionResults() {
