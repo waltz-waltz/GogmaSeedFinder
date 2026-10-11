@@ -242,6 +242,25 @@ document.head.append(Object.assign(document.createElement("style"), {
     .weapon-filter-settings { display: block; }
     .weapon-filter-settings .skill-filter-intro p { margin: 4px 0 12px; color: #a9a690; font-size: 0.8rem; }
     .weapon-filter-empty { color: #a9a690; font-size: 0.8rem; }
+    /* 大枠（当たり強調・条件一致だけ表示）：太い金色の枠。見出しと説明は枠内の上部に置く */
+    .skill-filter-settings:not(.weapon-filter-settings) {
+      align-items: start;
+      border: 3px solid #b8973f;
+      border-radius: 14px;
+      background: rgb(214 179 92 / 5%);
+    }
+    .skill-filter-settings:not(.weapon-filter-settings) > .skill-filter-intro {
+      grid-column: 1 / -1;
+      padding-bottom: 10px;
+      border-bottom: 1px solid rgb(214 179 92 / 30%);
+    }
+    .skill-filter-settings:not(.weapon-filter-settings) > .skill-filter-intro h3 { color: #e8c766; font-weight: 700; }
+    .skill-filter-settings:not(.weapon-filter-settings) > .skill-filter-intro p { font-size: 0.8rem; color: #a9a690; }
+    @media (min-width: 1401px) {
+      .skill-filter-settings:not(.weapon-filter-settings) {
+        grid-template-columns: minmax(170px, 0.7fr) minmax(190px, 0.7fr) minmax(360px, 1.8fr) minmax(220px, auto);
+      }
+    }
     /* 大枠（武器種ごとの条件）：太い金色の枠 */
     .skill-filter-settings.weapon-filter-settings {
       border: 3px solid #b8973f;
