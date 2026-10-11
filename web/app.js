@@ -242,8 +242,18 @@ document.head.append(Object.assign(document.createElement("style"), {
     .weapon-filter-settings { display: block; }
     .weapon-filter-settings .skill-filter-intro p { margin: 4px 0 12px; color: #a9a690; font-size: 0.8rem; }
     .weapon-filter-empty { color: #a9a690; font-size: 0.8rem; }
-    .weapon-filter-row { border: 1px solid #3a3c31; border-radius: 10px; margin-bottom: 8px; background: rgb(0 0 0 / 15%); }
+    /* 大枠（武器種ごとの条件）：太い金色の枠 */
+    .skill-filter-settings.weapon-filter-settings {
+      border: 3px solid #b8973f;
+      border-radius: 14px;
+      background: rgb(214 179 92 / 5%);
+    }
+    /* 中枠（武器種ごと）：大枠より少し細い枠。開いている武器種は明るく */
+    .weapon-filter-row { border: 2px solid #5f6b52; border-radius: 10px; margin-bottom: 10px; background: rgb(95 120 80 / 8%); }
+    .weapon-filter-row[open] { border-color: #8fae6f; background: rgb(110 150 90 / 10%); }
     .weapon-filter-row > summary { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: baseline; padding: 10px 14px; cursor: pointer; }
+    .weapon-filter-body .text-button { color: #ffffff; border-color: rgb(255 255 255 / 55%); }
+    .weapon-filter-body .text-button:hover { color: #ffffff; border-color: #ffffff; }
     .weapon-filter-name { font-weight: 700; color: #e8c766; min-width: 7em; }
     .weapon-filter-state { color: #a9a690; font-size: 0.8rem; }
     .weapon-filter-body { display: grid; gap: 12px; padding: 4px 14px 14px; }
