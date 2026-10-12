@@ -262,7 +262,8 @@ document.head.append(Object.assign(document.createElement("style"), {
     .weapon-filter-body .text-button { color: #ffffff; border-color: rgb(255 255 255 / 55%); }
     .weapon-filter-body .text-button:hover { color: #ffffff; border-color: #ffffff; }
     .weapon-filter-name { font-weight: 700; color: #e8c766; min-width: 7em; }
-    .weapon-filter-state { color: #a9a690; font-size: 0.8rem; }
+    /* 名前の横の説明（今のボーナス・条件など）：大きく明るく */
+    .weapon-filter-state { color: #ebe6d4; font-size: 0.9rem; font-weight: 600; }
     .weapon-filter-body { display: grid; gap: 12px; padding: 4px 14px 14px; }
     .weapon-filter-body > label { display: grid; gap: 4px; }
     .weapon-filter-body > label > select { max-width: 360px; }
@@ -473,7 +474,14 @@ document.head.append(Object.assign(document.createElement("style"), {
     /* 手持ち武器（同じ構成で再復元）：青緑系で狙い（リセット）と区別する */
     .owned-weapon-settings { border-color: #4f9a92; background: rgb(79 154 146 / 6%); }
     .owned-weapon-form { display: grid; gap: 10px; margin-bottom: 14px; padding: 12px 14px; border: 1px dashed #4f9a92; border-radius: 10px; }
-    .owned-weapon-form-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+    /* 名前と種類は長い言葉が入るので広く（例：【攻撃激化】状態異常＆属性やられ無効 火） */
+    .owned-weapon-form-row {
+      display: grid; gap: 8px; align-items: end;
+      grid-template-columns: minmax(300px, 2.4fr) minmax(130px, 1fr) minmax(130px, 1fr) minmax(150px, 1fr) minmax(260px, 2fr);
+    }
+    @media (max-width: 1100px) {
+      .owned-weapon-form-row { grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr)); }
+    }
     .owned-weapon-form-row label, .owned-weapon-card label { display: grid; gap: 4px; font-size: 0.76rem; font-weight: 700; }
     .owned-weapon-form-row select, .owned-weapon-form-row input { height: 38px; }
     .owned-weapon-slots { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; max-width: 640px; }
@@ -3918,9 +3926,9 @@ function renderOwnedWeaponSection() {
     const boost = boostSelect.value;
     const subtype = subtypeInput.value.trim();
     const attribute = optionName(ATTRIBUTES, Number(attributeSelectEl.value)).replace("属性", "");
-    const weapon = optionName(WEAPON_TYPES, Number(weaponSelectEl.value));
     if (!boost && !subtype) return "";
-    return `${boost ? `【${boost}】` : ""}${subtype ? `${subtype} ${attribute}` : `${attribute}${weapon}`}`;
+    // 例：「【属性激化】貫通 氷」、種類のない武器は「【会心激化】火」
+    return `${boost ? `【${boost}】` : ""}${subtype ? `${subtype} ` : ""}${attribute}`;
   };
   const updateName = () => {
     if (!nameEditedByHand) nameInput.value = autoName();
