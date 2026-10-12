@@ -295,6 +295,27 @@ document.head.append(Object.assign(document.createElement("style"), {
     .bonus-wish-next-kind { font-size: 0.72rem; color: #e8c766; }
     .bonus-wish-next-kind.owned { color: #8fe0d6; }
     .bonus-wish-next-list .comparison-bonus-set { grid-template-columns: repeat(5, auto); justify-content: start; }
+    /* 大枠：A「登録した武器をまとめて予測」（金）、B「1つの武器だけを詳しく調べる」（青灰） */
+    .big-frame { margin-top: 36px; padding: 24px 24px 28px; border: 4px solid #b8973f; border-radius: 18px; background: rgb(214 179 92 / 4%); }
+    .big-frame.big-frame-detail { border-color: #6f84a6; background: rgb(111 132 166 / 6%); }
+    .big-frame-note { margin: 4px 0 18px; padding: 10px 14px; border-left: 4px solid #6f84a6; background: rgb(111 132 166 / 12%); color: #d6dbe6; font-size: 0.82rem; line-height: 1.6; }
+    /* 中枠：①②③ */
+    .step-frame { margin-top: 20px; padding: 16px 18px 18px; border: 2px solid #6b6a55; border-radius: 14px; background: rgb(0 0 0 / 16%); }
+    .step-frame-header { display: flex; gap: 12px; align-items: center; }
+    .step-frame-header h3 { margin: 0; font-family: Georgia, "Yu Mincho", serif; font-size: 1.15rem; font-weight: 600; color: #f2eddc; }
+    .step-frame-number { display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: #e8c766; color: #1a1708; font-weight: 900; }
+    .step-frame-description { margin: 6px 0 14px; color: #b9b6a4; font-size: 0.8rem; line-height: 1.6; }
+    .step-subheading { margin-top: 26px; padding-top: 16px; border-top: 1px dashed #5a5236; }
+    .step-subheading h4 { margin: 0 0 4px; font-family: Georgia, "Yu Mincho", serif; font-size: 1rem; font-weight: 600; }
+    .step-subheading p { margin: 0; color: #b9b6a4; font-size: 0.78rem; line-height: 1.6; }
+    .comparison-table-options-hint { flex-basis: 100%; margin: 0; color: #a9a690; font-size: 0.72rem; }
+    /* ②の中の希望ボーナス欄は、中枠と二重にならないよう枠を外す */
+    .step-frame > .bonus-wish-settings:not(.owned-weapon-settings) { margin: 0; padding: 0; border: 0; background: none; }
+    .step-frame > .bonus-wish-settings:not(.owned-weapon-settings) > .skill-filter-intro { display: none; }
+    /* 次の一致：希望（例：攻撃×4）と、希望に当てはまる枠の強調 */
+    .bonus-wish-next-target { padding: 2px 8px; border: 1px solid #8a7a45; border-radius: 999px; color: #ffe39a; font-size: 0.72rem; font-weight: 800; }
+    .bonus-tag.wish-part { outline: 2px solid #ffe39a; outline-offset: 1px; opacity: 1; }
+    .bonus-tag.not-wish { opacity: 0.35; }
     /* 登録欄の切り替え */
     .registration-switch { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 4px 0 16px; }
     .registration-switch-label { color: #a9a690; font-size: 0.78rem; font-weight: 700; margin-right: 4px; }
@@ -3007,7 +3028,7 @@ function createComparisonRow(index) {
         ? createAdoptOwnedUpdateButton(target, target.rolls[index], index + 1)
         : createAdoptAsOwnedButton(target, target.rolls[index], index + 1);
       matchButton.classList.add("match-adopt-button");
-      item.append(name, createCompactBonusSet(target, target.rolls[index]), matchButton);
+      item.append(name, createCompactBonusSet(target, target.rolls[index], true), matchButton);
       matchCell.append(item);
     }
     if (!showAll) continue;
@@ -3033,15 +3054,26 @@ function createComparisonRow(index) {
   return row;
 }
 
-function createCompactBonusSet(target, bonusIds) {
+function createCompactBonusSet(target, bonusIds, highlightWish = false) {
   const bonusSet = document.createElement("div");
   bonusSet.className = "comparison-bonus-set";
   // 手持ち武器は、今のボーナスと枠ごとに比べて ↑（上がる）／↓（下がる）を付ける
   const current = target.kind === "owned" && ownedBonusesKnown(target) ? target.bonuses : null;
+  // 狙い（リセット）は、希望の系統に当てはまる枠を強調し、それ以外を薄くする
+  const need = highlightWish && target.kind !== "owned" ? [...bonusWishFor(target.weaponType).counts] : null;
   bonusIds.forEach((bonusId, slotIndex) => {
     const tag = document.createElement("span");
     tag.className = `bonus-tag compact ${bonusClassName(bonusId)}${EX_BONUS_IDS.has(bonusId) ? " ex" : ""}`;
     tag.textContent = compactGogmaBonusName(target.weaponType, bonusId);
+    if (need) {
+      const category = bonusCategoryId(bonusId);
+      if (need[category] > 0) {
+        need[category] -= 1;
+        tag.classList.add("wish-part");
+      } else {
+        tag.classList.add("not-wish");
+      }
+    }
     if (current) {
       const diff = bonusTierRank(bonusId) - bonusTierRank(current[slotIndex]);
       if (diff !== 0) {
@@ -3152,6 +3184,82 @@ function persistBonusView(view) {
     // The app remains usable when storage is unavailable.
   }
 }
+// 画面を「大枠A：登録した武器をまとめて予測（①登録 ②希望 ③結果）」と
+// 「大枠B：1つの武器だけを詳しく調べる」に分けて、何の話かを分かりやすくする
+function setupComparisonFrames() {
+  const section = document.querySelector(".comparison-section");
+  if (!section) return;
+  section.classList.add("big-frame", "big-frame-main");
+  const heading = section.querySelector(".comparison-heading h2, .comparison-heading h3");
+  if (heading) heading.textContent = "登録した武器をまとめて予測";
+
+  const createStep = (number, title, description) => {
+    const frame = document.createElement("section");
+    const header = document.createElement("div");
+    const badge = document.createElement("span");
+    const titleEl = document.createElement("h3");
+    const descriptionEl = document.createElement("p");
+    frame.className = "step-frame";
+    header.className = "step-frame-header";
+    badge.className = "step-frame-number";
+    badge.textContent = number;
+    titleEl.textContent = title;
+    descriptionEl.className = "step-frame-description";
+    descriptionEl.textContent = description;
+    header.append(badge, titleEl);
+    frame.append(header, descriptionEl);
+    return frame;
+  };
+
+  const step1 = createStep("1", "武器を登録する",
+    "「狙い」はリセットして再復元で狙う武器種・属性、「手持ち武器」は持っている武器（同じ構成で再復元してEXを厳選する武器）です。下のボタンで、どちらを登録するか切り替えます。");
+  step1.append(...[
+    document.querySelector(".comparison-settings"),
+    document.querySelector(".comparison-actions"),
+    comparisonTargetList,
+    comparisonError,
+    ownedWeaponSection,
+  ].filter(Boolean));
+
+  const step2 = createStep("2", "希望ボーナスを決める（狙い）",
+    "狙いの武器種ごとに、リセットで欲しい系統の数を決めます。手持ち武器の条件は、①の「手持ち武器」の欄で武器ごとに決めます。");
+  step2.append(bonusWishSection);
+
+  const step3 = createStep("3", "結果を見る",
+    "まず「次の一致」で、どの武器があと何回で希望どおりになるかを確認します。その下の表は、何回先ごとの詳しい結果です。");
+  const tableHeading = document.createElement("div");
+  tableHeading.className = "step-subheading";
+  const tableTitle = document.createElement("h4");
+  const tableDescription = document.createElement("p");
+  tableTitle.textContent = "回ごとの結果表";
+  tableDescription.textContent = "1行が「何回先」の1回分です。「一致」列に、その回に希望どおりになる武器が出ます。採用するときは、その武器の「採用して〜」ボタンか、左の「ここを0にする」を押します。下の設定は、この表の表示を切り替えるものです。";
+  tableHeading.append(tableTitle, tableDescription);
+  step3.append(...[
+    bonusWishSummary,
+    tableHeading,
+    comparisonTableWrap,
+    document.querySelector(".bonus-export-actions"),
+    document.querySelector(".comparison-section .adoption-note"),
+  ].filter(Boolean));
+  const adoptionNote = step3.querySelector(".adoption-note");
+  if (adoptionNote) {
+    adoptionNote.textContent = "「ここを0にする」は、ゲーム内でその回まで進めてセーブしたときに押します。「採用して手持ちに登録」「採用して手持ちを更新」は、0地点を進めるのと手持ち武器の登録・更新をまとめて行います。";
+  }
+
+  const firstStepAnchor = section.querySelector(".prediction-intro") ?? section.querySelector(".comparison-heading");
+  firstStepAnchor.after(step1, step2, step3);
+
+  // 大枠B：「1条件を詳しく絞り込む」は別の調べ方
+  if (detailPredictionSection) {
+    detailPredictionSection.classList.add("big-frame", "big-frame-detail");
+    const note = document.createElement("p");
+    note.className = "big-frame-note";
+    note.textContent = "ここは上とは別の調べ方です。登録しなくても、1つの武器種・属性だけを選んで、II・III・EXまで細かく指定して探せます。";
+    const detailHeading = detailPredictionSection.querySelector(".section-heading, h2, h3");
+    (detailHeading ?? detailPredictionSection.firstElementChild)?.after(note);
+  }
+}
+
 // 登録欄の切り替え：「狙い（リセット）」と「手持ち武器（同じ構成）」のどちらか一方だけを出す
 function setupRegistrationSwitch() {
   const view = loadBonusView();
@@ -3159,11 +3267,11 @@ function setupRegistrationSwitch() {
     document.querySelector(".comparison-settings"),
     document.querySelector(".comparison-actions"),
     comparisonTargetList,
-    bonusWishSection,
+    bonusWishSection.closest(".step-frame") ?? bonusWishSection,
   ].filter(Boolean);
   const intro = document.querySelector(".comparison-section .prediction-intro");
   if (intro) {
-    intro.textContent = "「狙い」は武器種・属性ごとにリセットして再復元したときの結果、「手持ち武器」は持っている武器を同じ構成で再復元したときの結果を、下の表にまとめて並べます。";
+    intro.textContent = "登録した武器ぜんぶについて、これから何回再復元すると希望のボーナスが出るかを予測します。①で武器を登録し、②で希望を決めると、③に結果が出ます。";
   }
 
   const switcher = document.createElement("div");
@@ -3218,19 +3326,23 @@ function setupComparisonTableOptions() {
     bar.append(label);
     return input;
   };
-  bonusWishMatchesOnly = makeToggle("一致した行だけ表示", view.matchesOnly, (checked) => {
+  bonusWishMatchesOnly = makeToggle("表は、希望ボーナスに一致した行だけ表示", view.matchesOnly, (checked) => {
     const next = loadBonusView();
     next.matchesOnly = checked;
     persistBonusView(next);
     renderComparisonTable();
   });
-  showAllComparisonColumns = makeToggle("武器ごとの全結果も表示（横に長くなります）", view.showAllColumns, (checked) => {
+  showAllComparisonColumns = makeToggle("表に、登録した全武器の結果も1列ずつ並べる（横に長くなり、横スクロールで見ます）", view.showAllColumns, (checked) => {
     const next = loadBonusView();
     next.showAllColumns = checked;
     persistBonusView(next);
     renderComparisonTable();
   });
-  bonusWishSummary.before(bar);
+  const countHint = document.createElement("p");
+  countHint.className = "comparison-table-options-hint";
+  countHint.textContent = "「表示する回数」は、何回先まで予測するかです（上の「次の一致」にも使われます）。";
+  bar.append(countHint);
+  comparisonTableWrap.before(bar);
 }
 
 function renderBonusWishSection() {
@@ -3249,6 +3361,7 @@ function renderBonusWishSection() {
     const exFilterBox = document.querySelector(".bonus-ex-filter-settings");
     if (exFilterBox) exFilterBox.style.display = "none";
     bonusExFilterEnabled.checked = false;
+    setupComparisonFrames();
     setupRegistrationSwitch();
     setupComparisonTableOptions();
   }
@@ -3414,10 +3527,15 @@ function renderBonusWishSummary() {
     } else {
       when.textContent = `あと${hits[0] + 1}回`;
       const others = results.filter((other) => other.target !== target && other.hits.includes(hits[0])).length;
+      const wish = document.createElement("span");
+      wish.className = "bonus-wish-next-target";
+      wish.textContent = target.kind === "owned"
+        ? `希望：${ownedRuleText(target)}`
+        : `希望：${bonusWishText(target.weaponType)}`;
       const note = document.createElement("span");
       note.className = "bonus-wish-next-wish";
       note.textContent = others > 0 ? `同じ回にほか${others}武器も一致` : "";
-      item.append(when, kind, name, createCompactBonusSet(target, target.rolls[hits[0]]), note);
+      item.append(when, kind, name, wish, createCompactBonusSet(target, target.rolls[hits[0]], true), note);
     }
     list.append(item);
   }
