@@ -334,6 +334,25 @@ document.head.append(Object.assign(document.createElement("style"), {
     .detail-match-cell { width: 80px; }
     .detail-bonus-set { display: flex; flex-wrap: wrap; gap: 5px; }
     .detail-bonus-set .bonus-tag { min-width: 112px; padding: 5px 7px; }
+    /* 手持ち武器（同じ構成で再復元）：青緑系で狙い（リセット）と区別する */
+    .owned-weapon-settings { border-color: #4f9a92; background: rgb(79 154 146 / 6%); }
+    .owned-weapon-form { display: grid; gap: 10px; margin-bottom: 14px; padding: 12px 14px; border: 1px dashed #4f9a92; border-radius: 10px; }
+    .owned-weapon-form-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+    .owned-weapon-form-row label, .owned-weapon-card label { display: grid; gap: 4px; font-size: 0.76rem; font-weight: 700; }
+    .owned-weapon-form-row select, .owned-weapon-form-row input { height: 38px; }
+    .owned-weapon-slots { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; max-width: 640px; }
+    .owned-weapon-slots label { display: grid; gap: 4px; font-size: 0.72rem; font-weight: 700; }
+    .owned-weapon-slots select { height: 36px; min-width: 0; }
+    .owned-weapon-form .small-button { justify-self: start; }
+    .owned-weapon-card .weapon-filter-name { color: #8fe0d6; }
+    .owned-weapon-card .weapon-filter-body > label { max-width: 300px; }
+    .owned-remove-button { margin-left: auto; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 50%; background: #30332b; color: #c9c6b8; cursor: pointer; }
+    .owned-remove-button:hover { background: #5a2e28; color: #fff; }
+    .column-kind { display: block; margin-bottom: 2px; font-size: 0.62rem; font-weight: 700; letter-spacing: 0; color: #a9a690; }
+    .column-layout { display: block; margin-top: 2px; font-size: 0.66rem; color: #8fe0d6; }
+    .comparison-table thead th.owned-column-header { background: #17302d; border-bottom: 2px solid #4f9a92; }
+    .comparison-table thead th.owned-column-header .column-kind { color: #8fe0d6; }
+    td.owned-result-cell { background: rgb(79 154 146 / 7%); }
     .detail-result-cell .keep-transition-button { display: inline-block; width: auto; margin-top: 6px; padding-inline: 14px; }
     @media (min-width: 900px) {
       .comparison-table > thead > tr > th:nth-child(3),
@@ -526,7 +545,14 @@ const persistedAppState = loadPersistedAppState();
 let saveState = persistedAppState.saveState;
 let comparisonTargets = persistedAppState.targets;
 let bonusPrediction = persistedAppState.bonusPrediction;
-// 武器種ごとの希望ボーナス { [weaponType]: { counts: [攻撃, 会心, 属性, 斬れ味・装填], minEx } }
+// 「リセット／同じ構成」の切り替えは廃止。表はリセット（狙い）と同じ構成（手持ち武器）を並べて出す
+bonusPrediction.mode = "reset";
+// 手持ち武器 [{ id, label, weaponType, attributeForce, categories: 1〜5枠目の系統, minEx }]
+const OWNED_WEAPONS_KEY = "gogma-seed-finder-owned-weapons-v1";
+const MAX_OWNED_WEAPONS = 60;
+let ownedWeapons = loadOwnedWeapons();
+let ownedWeaponSection = null;
+// 武器種ごとの希望ボーナス { [weaponType]: { counts: [攻撃, 会心, 属性, 斬れ味・装填] } }
 const BONUS_WISHES_KEY = "gogma-seed-finder-bonus-wishes-v1";
 const BONUS_WISH_MAX = [5, 5, 4, 2];
 let bonusWishes = loadJsonObject(BONUS_WISHES_KEY);
@@ -1042,7 +1068,10 @@ function renderBonusOperation() {
   bonusOperationKeep.checked = keepMode;
   keepLayoutPanel.hidden = !keepMode;
   detailPredictionSection.hidden = keepMode;
-  bonusFutureKicker.textContent = keepMode ? "KEEP BONUSES FUTURE" : "RESET BONUSES FUTURE";
+  bonusFutureKicker.textContent = "BONUS FUTURE";
+  // 切り替え欄は使わない（手持ち武器の登録で「同じ構成で再復元」も同じ表に出す）
+  const operationSection = document.querySelector(".bonus-operation-section");
+  if (operationSection) operationSection.style.display = "none";
   renderKeepLayoutInputs();
   updateComparisonStatus();
 }
@@ -1950,8 +1979,7 @@ function saveDetailFilters() {
   if (predictionIgnoreTier.checked) {
     const counts = [0, 0, 0, 0];
     for (const category of values) counts[category] += 1;
-    const minEx = bonusWishFor(weaponType).minEx;
-    if (counts.some((count) => count > 0) || minEx > 0) bonusWishes[weaponType] = { counts, minEx };
+    if (counts.some((count) => count > 0)) bonusWishes[weaponType] = { counts };
     else delete bonusWishes[weaponType];
     persistBonusWishes();
     renderBonusWishSection();
@@ -2257,18 +2285,11 @@ function createPredictionRow(roll, requirements) {
     tags.append(tag);
   }
   resultCell.append(tags);
-  if (bonusPrediction.mode === "reset") {
-    const keepButton = document.createElement("button");
-    keepButton.type = "button";
-    keepButton.className = "keep-transition-button";
-    keepButton.textContent = "この構成でEX厳選へ";
-    keepButton.addEventListener("click", () => void beginKeepOptimization(
-      { weaponType, attributeForce: Number(predictionAttributeSelect.value), label: "" },
-      roll.bonusIds,
-      roll.index + 1,
-    ));
-    resultCell.append(keepButton);
-  }
+  resultCell.append(createAdoptAsOwnedButton(
+    { weaponType, attributeForce: Number(predictionAttributeSelect.value) },
+    roll.bonusIds,
+    roll.index + 1,
+  ));
   row.append(resultCell);
 
   return row;
@@ -2474,7 +2495,8 @@ function comparisonTargetName(target) {
 function predictionCsvTargetName(target) {
   const weapon = optionName(WEAPON_TYPES, target.weaponType);
   const attribute = optionName(ATTRIBUTES, target.attributeForce);
-  return `${comparisonTargetName(target)} (${t(weapon)} / ${t(attribute)})`;
+  const kind = target.kind === "owned" ? ` / 手持ち・同じ構成 ${ownedLayoutText(target)}` : "";
+  return `${comparisonTargetName(target)} (${t(weapon)} / ${t(attribute)}${kind})`;
 }
 
 function downloadCsv(filename, headers, rows) {
@@ -2536,7 +2558,8 @@ async function refreshComparisonPredictions() {
   const requestId = ++comparisonRequestId;
   hideComparisonError();
 
-  if (!selectedCandidate || comparisonTargets.length === 0) {
+  const usableOwned = ownedWeapons.filter((weapon) => ownedWeaponProblem(weapon) === null);
+  if (!selectedCandidate || (comparisonTargets.length === 0 && usableOwned.length === 0)) {
     comparisonRollSets = [];
     renderComparisonTable();
     return;
@@ -2548,21 +2571,29 @@ async function refreshComparisonPredictions() {
   try {
     const count = readComparisonCount();
     await ensurePredictionWasm();
-    const predictionTargets = bonusPrediction.mode === "keep"
-      ? comparisonTargets.filter((target) => keepLayoutProblem(target) === null)
-      : uniqueTargetsByCombination();
-    if (predictionTargets.length === 0) {
-      throw new Error("EX厳選する武器の現在5枠構成を入力してください。");
-    }
-    const nextRollSets = predictionTargets.map((target) => {
-      const flattened = predictBonusRollsForTarget(target, count);
-      return {
+    const toRolls = (flattened) => Array.from({ length: count }, (_, index) =>
+      Array.from(flattened.slice(index * 5, index * 5 + 5)));
+    const nextRollSets = [
+      // 狙い：リセットして再復元
+      ...uniqueTargetsByCombination().map((target) => ({
         ...target,
-        rolls: Array.from({ length: count }, (_, index) =>
-          Array.from(flattened.slice(index * 5, index * 5 + 5)),
-        ),
-      };
-    });
+        kind: "reset",
+        rolls: toRolls(predict_gogma_rolls(
+          selectedCandidate.seed, target.weaponType, target.attributeForce,
+          selectedCandidate.counter, lastSearchConfig?.counterGate ?? 35, count,
+        )),
+      })),
+      // 手持ち武器：同じ構成で再復元
+      ...usableOwned.map((weapon) => ({
+        ...weapon,
+        kind: "owned",
+        rolls: toRolls(predict_gogma_keep_rolls(
+          selectedCandidate.seed, weapon.weaponType, weapon.attributeForce,
+          selectedCandidate.counter, lastSearchConfig?.counterGate ?? 35, count,
+          new Uint8Array(weapon.categories),
+        )),
+      })),
+    ];
     if (requestId !== comparisonRequestId) return;
     comparisonRollSets = nextRollSets;
     renderComparisonTable();
@@ -2621,8 +2652,18 @@ function renderComparisonTable() {
     matchHeader,
     ...comparisonRollSets.map((target) => {
       const header = document.createElement("th");
+      const kind = document.createElement("span");
       header.scope = "col";
-      header.textContent = comparisonTargetName(target);
+      header.className = target.kind === "owned" ? "owned-column-header" : "reset-column-header";
+      kind.className = "column-kind";
+      kind.textContent = target.kind === "owned" ? "手持ち・同じ構成" : "狙い・リセット";
+      header.append(kind, document.createTextNode(comparisonTargetName(target)));
+      if (target.kind === "owned") {
+        const layout = document.createElement("span");
+        layout.className = "column-layout";
+        layout.textContent = ownedLayoutText(target);
+        header.append(layout);
+      }
       return header;
     }),
   );
@@ -2647,12 +2688,12 @@ function renderComparisonTable() {
   bonusExportStatus.textContent = bonusExFilterEnabled.checked
     ? `EX条件一致で現在表示中の${visibleIndices.length.toLocaleString("ja-JP")}行をCSVへ出力します。`
     : `現在表示中の${visibleIndices.length.toLocaleString("ja-JP")}行をCSVへ出力します。`;
-  const unit = bonusPrediction.mode === "keep" ? "武器" : "条件";
-  const prefix = bonusPrediction.mode === "keep" ? "EX厳選・" : "";
+  const resetCount = comparisonRollSets.filter((target) => target.kind !== "owned").length;
+  const ownedCount = comparisonRollSets.length - resetCount;
   const filterStatus = bonusExFilterEnabled.checked
     ? `・EX${minimumExCount}個以上 ${visibleIndices.length.toLocaleString("ja-JP")}行`
     : "";
-  comparisonStatus.textContent = `${prefix}${comparisonRollSets.length.toLocaleString("ja-JP")}${unit} × ${count.toLocaleString("ja-JP")}回${filterStatus}`;
+  comparisonStatus.textContent = `狙い${resetCount}・手持ち${ownedCount} × ${count.toLocaleString("ja-JP")}回${filterStatus}`;
   comparisonStatus.className = "status-pill complete";
   renderBonusWishSummary();
 }
@@ -2715,21 +2756,14 @@ function createComparisonRow(index) {
       const name = document.createElement("div");
       item.className = "skill-match-item";
       name.className = "skill-match-name";
-      name.textContent = comparisonTargetName(target);
+      name.textContent = `${comparisonTargetName(target)}（${target.kind === "owned" ? "同じ構成" : "リセット"}）`;
       item.append(name, createCompactBonusSet(target, target.rolls[index]));
       matchCell.append(item);
     }
-    if (bonusPrediction.mode === "reset") {
-      const keepButton = document.createElement("button");
-      keepButton.type = "button";
-      keepButton.className = "keep-transition-button";
-      keepButton.textContent = "この構成でEX厳選へ";
-      keepButton.addEventListener("click", () => void beginKeepOptimization(
-        target,
-        target.rolls[index],
-        index + 1,
-      ));
-      bonusSet.append(keepButton);
+    if (target.kind === "owned") {
+      cell.classList.add("owned-result-cell");
+    } else {
+      bonusSet.append(createAdoptAsOwnedButton(target, target.rolls[index], index + 1));
     }
     cell.classList.add("comparison-result-cell");
     cell.append(bonusSet);
@@ -2772,7 +2806,6 @@ function bonusWishFor(weaponType) {
   return {
     counts: BONUS_WISH_MAX.map((max, category) =>
       Math.max(0, Math.min(max, Math.trunc(Number(entry?.counts?.[category]) || 0)))),
-    minEx: Math.max(0, Math.min(5, Math.trunc(Number(entry?.minEx) || 0))),
   };
 }
 
@@ -2780,27 +2813,34 @@ function bonusWishTotal(wish) {
   return wish.counts.reduce((sum, count) => sum + count, 0);
 }
 
-function hasBonusWish(weaponType, mode = bonusPrediction.mode) {
-  const wish = bonusWishFor(weaponType);
-  return mode === "keep" ? wish.minEx > 0 : bonusWishTotal(wish) > 0;
+// 狙い（リセット）は武器種ごとの希望、手持ち（同じ構成）は武器ごとのEX数
+function targetHasWish(target) {
+  return target.kind === "owned"
+    ? target.minEx > 0
+    : bonusWishTotal(bonusWishFor(target.weaponType)) > 0;
 }
 
-function bonusWishText(weaponType, mode) {
+function targetWishText(target) {
+  return target.kind === "owned"
+    ? `同じ構成でEX ${target.minEx}個以上`
+    : `リセットで ${bonusWishText(target.weaponType)}`;
+}
+
+function bonusWishText(weaponType) {
   const wish = bonusWishFor(weaponType);
-  if (mode === "keep") return wish.minEx > 0 ? `EX ${wish.minEx}個以上` : "指定なし";
   const parts = keepCategoriesForWeapon(weaponType, 1)
     .filter(([category]) => wish.counts[category] > 0)
     .map(([category, name]) => `${name}×${wish.counts[category]}`);
   return parts.length > 0 ? parts.join("＋") : "指定なし";
 }
 
-// リセット：系統の数（順不同・II/III/EXは区別しない）を満たすか。EX厳選：EXの数が最低数以上か
+// リセット：系統の数（順不同・II/III/EXは区別しない）を満たすか。手持ち：EXの数が最低数以上か
 function rollMatchesBonusWish(target, bonusIds) {
-  const wish = bonusWishFor(target.weaponType);
-  if (bonusPrediction.mode === "keep") {
-    return wish.minEx > 0
-      && bonusIds.filter((bonusId) => EX_BONUS_IDS.has(bonusId)).length >= wish.minEx;
+  if (target.kind === "owned") {
+    return target.minEx > 0
+      && bonusIds.filter((bonusId) => EX_BONUS_IDS.has(bonusId)).length >= target.minEx;
   }
+  const wish = bonusWishFor(target.weaponType);
   const total = bonusWishTotal(wish);
   if (total === 0 || total > 5) return false;
   const counts = [0, 0, 0, 0];
@@ -2820,7 +2860,11 @@ function renderBonusWishSection() {
     bonusWishMatchesOnly = document.createElement("input");
     bonusWishMatchesOnly.type = "checkbox";
     bonusWishMatchesOnly.addEventListener("change", () => renderComparisonTable());
+    ownedWeaponSection = document.createElement("section");
+    ownedWeaponSection.className = "bonus-wish-settings owned-weapon-settings";
+    bonusWishSection.after(ownedWeaponSection);
   }
+  renderOwnedWeaponSection();
 
   const weaponTypes = [...new Set(comparisonTargets.map((target) => target.weaponType))]
     .sort((a, b) => a - b);
@@ -2828,9 +2872,9 @@ function renderBonusWishSection() {
   const intro = document.createElement("div");
   intro.className = "skill-filter-intro";
   const title = document.createElement("strong");
-  title.textContent = "武器種ごとの希望ボーナス";
+  title.textContent = "狙い（リセットして再復元）の希望ボーナス";
   const description = document.createElement("p");
-  description.textContent = "武器種ごとに欲しいボーナスを決めておくと、表の「一致」列に当たりが出ます。「リセットして再復元」では系統の数（順不同・II／III／EXは区別しない）、「同じ構成で再復元」ではEXの数で判定します。設定はこのブラウザに保存されます。";
+  description.textContent = "上で登録した武器種ごとに、リセットで欲しい系統の数を決めます（順不同・II／III／EXは区別しない）。当たりは表の「一致」列に出ます。設定はこのブラウザに保存されます。";
   const toggle = document.createElement("label");
   toggle.className = "checkbox-label bonus-wish-toggle";
   const toggleText = document.createElement("span");
@@ -2849,7 +2893,7 @@ function renderBonusWishSection() {
   const rows = weaponTypes.map((weaponType) => {
     const row = document.createElement("details");
     row.className = "weapon-filter-row";
-    row.open = hasBonusWish(weaponType, "reset") || hasBonusWish(weaponType, "keep");
+    row.open = bonusWishTotal(bonusWishFor(weaponType)) > 0;
 
     const summary = document.createElement("summary");
     const name = document.createElement("span");
@@ -2858,7 +2902,7 @@ function renderBonusWishSection() {
     const state = document.createElement("span");
     state.className = "weapon-filter-state";
     const updateState = () => {
-      state.textContent = `リセット：${bonusWishText(weaponType, "reset")}　／　EX厳選：${bonusWishText(weaponType, "keep")}`;
+      state.textContent = bonusWishText(weaponType);
     };
     updateState();
     summary.append(name, state);
@@ -2889,18 +2933,6 @@ function renderBonusWishSection() {
     total.className = "bonus-wish-total";
     categoryFieldset.append(legend, categoryGrid, total);
 
-    const exLabel = document.createElement("label");
-    exLabel.className = "bonus-wish-ex";
-    const exText = document.createElement("span");
-    exText.textContent = "同じ構成で再復元（EX厳選）のとき";
-    const exSelect = document.createElement("select");
-    populateSelect(
-      exSelect,
-      [[0, "指定しない"], ...[1, 2, 3, 4].map((count) => [count, `EX ${count}個以上`]), [5, "EX 5個"]],
-      wish.minEx,
-    );
-    exLabel.append(exText, exSelect);
-
     const note = document.createElement("p");
     note.className = "weapon-filter-empty";
     note.textContent = weaponType === BOW_WEAPON_TYPE
@@ -2924,8 +2956,7 @@ function renderBonusWishSection() {
     const save = () => {
       const counts = [0, 0, 0, 0];
       categorySelects.forEach((select, category) => { counts[category] = Number(select.value); });
-      const minEx = Number(exSelect.value);
-      if (counts.some((count) => count > 0) || minEx > 0) bonusWishes[weaponType] = { counts, minEx };
+      if (counts.some((count) => count > 0)) bonusWishes[weaponType] = { counts };
       else delete bonusWishes[weaponType];
       persistBonusWishes();
       updateState();
@@ -2938,16 +2969,14 @@ function renderBonusWishSection() {
       }
     };
     categoryGrid.addEventListener("change", save);
-    exSelect.addEventListener("change", save);
     clearButton.addEventListener("click", () => {
       categorySelects.forEach((select) => { select.value = "0"; });
-      exSelect.value = "0";
       save();
     });
 
     const body = document.createElement("div");
     body.className = "weapon-filter-body";
-    body.append(categoryFieldset, exLabel, note, clearButton);
+    body.append(categoryFieldset, note, clearButton);
     row.append(summary, body);
     return row;
   });
@@ -2958,8 +2987,7 @@ function renderBonusWishSection() {
 // 武器ごとの「次の一致」と、カウンターの小さい順に並べた採用の順番
 function renderBonusWishSummary() {
   if (!bonusWishSummary) return;
-  const mode = bonusPrediction.mode;
-  const wishedTargets = comparisonRollSets.filter((target) => hasBonusWish(target.weaponType, mode));
+  const wishedTargets = comparisonRollSets.filter((target) => targetHasWish(target));
   if (!selectedCandidate || wishedTargets.length === 0) {
     bonusWishSummary.hidden = true;
     bonusWishSummary.replaceChildren();
@@ -2988,7 +3016,7 @@ function renderBonusWishSummary() {
     name.textContent = comparisonTargetName(target);
     const wishText = document.createElement("span");
     wishText.className = "bonus-wish-next-wish";
-    wishText.textContent = bonusWishText(target.weaponType, mode);
+    wishText.textContent = targetWishText(target);
     const result = document.createElement("span");
     result.className = "bonus-wish-next-result";
     result.textContent = hits.length === 0
@@ -2999,10 +3027,26 @@ function renderBonusWishSummary() {
     list.append(item);
   }
 
-  const plan = results
-    .filter(({ hits }) => hits.length > 0)
-    .map(({ target, hits }) => ({ target, index: hits[0] }))
-    .sort((a, b) => a.index - b.index);
+  // 同じ回に2つの当たりが重なったら、他にも当たりがある武器はその次の当たりへずらす
+  const plan = [];
+  const usedIndices = new Set();
+  let remaining = results.filter(({ hits }) => hits.length > 0);
+  while (remaining.length > 0) {
+    let best = null;
+    for (const entry of remaining) {
+      const index = entry.hits.find((hit) => !usedIndices.has(hit));
+      if (index !== undefined && (best === null || index < best.index)) best = { entry, index };
+    }
+    if (best === null) {
+      // 当たりが全部ほかと重なっている武器は、最初の当たりで「重なり」として出す
+      for (const entry of remaining) plan.push({ target: entry.target, index: entry.hits[0] });
+      break;
+    }
+    plan.push({ target: best.entry.target, index: best.index });
+    usedIndices.add(best.index);
+    remaining = remaining.filter((entry) => entry !== best.entry);
+  }
+  plan.sort((a, b) => a.index - b.index);
 
   const children = [title, list];
   if (plan.length > 0) {
@@ -3015,16 +3059,17 @@ function renderBonusWishSummary() {
       const step = document.createElement("li");
       const advance = index + 1 - previous;
       const name = comparisonTargetName(target);
+      const method = target.kind === "owned" ? "「同じ構成で再復元」" : "「リセットして再復元」";
       step.textContent = advance <= 0
         ? `${index + 1}回先：${name}（同じ回で別の武器と重なっています。どちらか1つを選んでください）`
         : advance === 1
-          ? `${index + 1}回先：次の1回を${name}で再復元して採用・セーブ`
-          : `${index + 1}回先：${advance - 1}回は別の武器で再復元して進める → ${advance}回目を${name}で再復元して採用・セーブ`;
+          ? `${index + 1}回先：次の1回を${name}で${method}して採用・セーブ`
+          : `${index + 1}回先：${advance - 1}回は別の武器で再復元して進める → ${advance}回目を${name}で${method}して採用・セーブ`;
       planList.append(step);
       previous = Math.max(previous, index + 1);
     }
     const planNote = document.createElement("p");
-    planNote.textContent = "復元ボーナスカウンターは全武器で共通なので、当たりまでの途中の再復元はどの武器で行っても同じように1つずつ進みます。ただし、再復元した武器のボーナスは変わるので、採用済みの武器では進めないでください。採用したら、その行の「ここを0にする」で続きを予測できます。";
+    planNote.textContent = "復元ボーナスカウンターは全武器・どちらの再復元でも共通なので、当たりまでの途中の再復元はどの武器で行っても1つずつ進みます。ただし、再復元した武器のボーナスは変わるので、採用済みの武器では進めないでください。採用したら、その行の「ここを0にする」で続きを予測できます（リセットの当たりは「採用して手持ちに登録」を押すと、0地点の更新と手持ち登録をまとめて行います）。";
     children.push(planTitle, planList, planNote);
   }
 
@@ -3032,8 +3077,291 @@ function renderBonusWishSummary() {
   bonusWishSummary.hidden = false;
 }
 
+function loadOwnedWeapons() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(OWNED_WEAPONS_KEY) ?? "[]");
+    if (!Array.isArray(saved)) return [];
+    return saved
+      .filter((weapon) =>
+        Number.isSafeInteger(weapon?.weaponType) && weapon.weaponType >= 0 && weapon.weaponType <= 13 &&
+        Number.isSafeInteger(weapon?.attributeForce) && weapon.attributeForce >= 0 && weapon.attributeForce <= 9)
+      .slice(0, MAX_OWNED_WEAPONS)
+      .map((weapon) => ({
+        id: typeof weapon.id === "string" && weapon.id ? weapon.id : createTargetId(),
+        label: typeof weapon.label === "string" ? weapon.label.slice(0, 24) : "",
+        weaponType: weapon.weaponType,
+        attributeForce: weapon.attributeForce,
+        categories: normalizeKeepCategories(weapon.categories),
+        minEx: Math.max(1, Math.min(5, Math.trunc(Number(weapon.minEx) || 2))),
+      }));
+  } catch {
+    return [];
+  }
+}
+
+function persistOwnedWeapons() {
+  try {
+    localStorage.setItem(OWNED_WEAPONS_KEY, JSON.stringify(ownedWeapons));
+  } catch {
+    // The app remains usable when storage is unavailable.
+  }
+}
+
+function ownedWeaponProblem(weapon) {
+  return keepLayoutProblem({ ...weapon, keepCategories: weapon.categories });
+}
+
+function ownedWeaponDefaultName(weapon) {
+  return localizedTargetName(
+    optionName(WEAPON_TYPES, weapon.weaponType),
+    optionName(ATTRIBUTES, weapon.attributeForce),
+  );
+}
+
+// 例：「攻 攻 攻 攻 属」
+function ownedLayoutText(weapon) {
+  const names = new Map(keepCategoriesForWeapon(weapon.weaponType, weapon.attributeForce));
+  return normalizeKeepCategories(weapon.categories)
+    .map((category) => category === null ? "？" : (names.get(category) ?? "？").slice(0, 1))
+    .join(" ");
+}
+
+function createAdoptAsOwnedButton(target, bonusIds, completedRolls) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "keep-transition-button";
+  button.textContent = "採用して手持ちに登録";
+  button.title = "この結果を採用してセーブしたものとして0地点を進め、この構成を手持ち武器に登録します";
+  button.addEventListener("click", () => void adoptResetAsOwned(target, bonusIds, completedRolls));
+  return button;
+}
+
+// リセットの当たりを採用：手持ち武器に登録（同じ武器種・属性があれば上書きを確認）して、0地点を進める
+async function adoptResetAsOwned(target, bonusIds, completedRolls) {
+  hideComparisonError();
+  const categories = bonusIds.map(bonusCategoryId);
+  const sameKind = ownedWeapons.filter((weapon) =>
+    weapon.weaponType === target.weaponType && weapon.attributeForce === target.attributeForce);
+  let weapon = null;
+  if (sameKind.length > 0 && window.confirm(
+    `手持ちに「${comparisonTargetName(sameKind[0])}」があります。この武器の構成を上書きしますか？\n（キャンセルを押すと、新しい武器として追加します）`,
+  )) {
+    weapon = sameKind[0];
+    weapon.categories = categories;
+  } else {
+    if (ownedWeapons.length >= MAX_OWNED_WEAPONS) {
+      showComparisonError(`手持ち武器は最大${MAX_OWNED_WEAPONS}本です。不要な武器を削除してください。`);
+      return;
+    }
+    weapon = {
+      id: createTargetId(),
+      label: "",
+      weaponType: target.weaponType,
+      attributeForce: target.attributeForce,
+      categories,
+      minEx: 2,
+    };
+    ownedWeapons.push(weapon);
+  }
+  persistOwnedWeapons();
+  renderOwnedWeaponSection();
+  await adoptBonusPosition(completedRolls);
+  bonusStateMessage.textContent = `${completedRolls}回先の結果を採用して0地点を進め、「${comparisonTargetName(weapon)}」を手持ち武器（${ownedLayoutText(weapon)}）として登録しました。`;
+}
+
+function createOwnedSlotSelects(weaponType, attributeForce, categories) {
+  const options = keepCategoriesForWeapon(weaponType, attributeForce);
+  return Array.from({ length: 5 }, (_, slotIndex) => {
+    const label = document.createElement("label");
+    const text = document.createElement("span");
+    const select = document.createElement("select");
+    text.textContent = `${slotIndex + 1}枠目`;
+    populateSelect(select, [["", "選択"], ...options], categories[slotIndex] ?? "");
+    label.append(text, select);
+    return label;
+  });
+}
+
+function readSlotSelects(container) {
+  return [...container.querySelectorAll("select")].map((select) =>
+    select.value === "" ? null : Number(select.value));
+}
+
+function createMinExSelect(value) {
+  const select = document.createElement("select");
+  populateSelect(
+    select,
+    [1, 2, 3, 4, 5].map((count) => [count, count === 5 ? "EX 5個" : `EX ${count}個以上`]),
+    value,
+  );
+  return select;
+}
+
+function renderOwnedWeaponSection() {
+  if (!ownedWeaponSection) return;
+  const intro = document.createElement("div");
+  intro.className = "skill-filter-intro";
+  const title = document.createElement("strong");
+  title.textContent = "手持ち武器（同じ構成で再復元＝EX厳選）";
+  const description = document.createElement("p");
+  description.textContent = "実際に持っている武器を登録すると、「同じ構成で再復元」したときの結果が表に並び、EXが希望の数以上つく回が「一致」列に出ます。構成はゲーム画面の1枠目〜5枠目の順番どおりに入れてください（順番が違うと予測がずれます）。";
+  intro.append(title, description);
+
+  // 追加フォーム
+  const form = document.createElement("div");
+  form.className = "owned-weapon-form";
+  const nameLabel = document.createElement("label");
+  const nameText = document.createElement("span");
+  const nameInput = document.createElement("input");
+  nameText.textContent = "名前（任意）";
+  nameInput.type = "text";
+  nameInput.maxLength = 24;
+  nameInput.placeholder = "例：メイン雷弓";
+  nameLabel.append(nameText, nameInput);
+  const weaponLabel = document.createElement("label");
+  const weaponText = document.createElement("span");
+  const weaponSelectEl = document.createElement("select");
+  weaponText.textContent = "武器種";
+  populateSelect(weaponSelectEl, WEAPON_TYPES, Number(comparisonWeaponSelect.value));
+  weaponLabel.append(weaponText, weaponSelectEl);
+  const attributeLabel = document.createElement("label");
+  const attributeText = document.createElement("span");
+  const attributeSelectEl = document.createElement("select");
+  attributeText.textContent = "属性";
+  populateSelect(attributeSelectEl, ATTRIBUTES, Number(comparisonAttributeSelect.value));
+  attributeLabel.append(attributeText, attributeSelectEl);
+  const exLabel = document.createElement("label");
+  const exText = document.createElement("span");
+  const exSelect = createMinExSelect(2);
+  exText.textContent = "希望";
+  exLabel.append(exText, exSelect);
+  const slots = document.createElement("div");
+  slots.className = "owned-weapon-slots";
+  const renderFormSlots = () => {
+    const current = readSlotSelects(slots);
+    slots.replaceChildren(...createOwnedSlotSelects(
+      Number(weaponSelectEl.value), Number(attributeSelectEl.value), current));
+  };
+  renderFormSlots();
+  weaponSelectEl.addEventListener("change", renderFormSlots);
+  attributeSelectEl.addEventListener("change", renderFormSlots);
+  const addButton = document.createElement("button");
+  addButton.type = "button";
+  addButton.className = "secondary small-button";
+  addButton.textContent = "手持ち武器を登録";
+  const error = document.createElement("p");
+  error.className = "error";
+  error.hidden = true;
+  addButton.addEventListener("click", () => {
+    const weapon = {
+      id: createTargetId(),
+      label: nameInput.value.trim(),
+      weaponType: Number(weaponSelectEl.value),
+      attributeForce: Number(attributeSelectEl.value),
+      categories: readSlotSelects(slots),
+      minEx: Number(exSelect.value),
+    };
+    const problem = ownedWeaponProblem(weapon);
+    if (problem) {
+      error.textContent = problem;
+      error.hidden = false;
+      return;
+    }
+    if (ownedWeapons.length >= MAX_OWNED_WEAPONS) {
+      error.textContent = `手持ち武器は最大${MAX_OWNED_WEAPONS}本です。`;
+      error.hidden = false;
+      return;
+    }
+    ownedWeapons.push(weapon);
+    persistOwnedWeapons();
+    renderOwnedWeaponSection();
+    void refreshComparisonPredictions();
+  });
+  const formRow = document.createElement("div");
+  formRow.className = "owned-weapon-form-row";
+  formRow.append(nameLabel, weaponLabel, attributeLabel, exLabel);
+  form.append(formRow, slots, addButton, error);
+
+  // 登録済みの手持ち武器
+  const cards = ownedWeapons.map((weapon) => {
+    const card = document.createElement("details");
+    card.className = "weapon-filter-row owned-weapon-card";
+    const problem = ownedWeaponProblem(weapon);
+    card.open = problem !== null;
+    const summary = document.createElement("summary");
+    const name = document.createElement("span");
+    name.className = "weapon-filter-name";
+    name.textContent = comparisonTargetName(weapon);
+    const state = document.createElement("span");
+    state.className = "weapon-filter-state";
+    const updateState = () => {
+      const currentProblem = ownedWeaponProblem(weapon);
+      state.textContent = currentProblem
+        ? `⚠ ${currentProblem}`
+        : `${t(optionName(WEAPON_TYPES, weapon.weaponType))}・${t(optionName(ATTRIBUTES, weapon.attributeForce))}｜${ownedLayoutText(weapon)}｜EX ${weapon.minEx}個以上で一致`;
+    };
+    updateState();
+    const removeButton = document.createElement("button");
+    removeButton.type = "button";
+    removeButton.className = "owned-remove-button";
+    removeButton.textContent = "×";
+    removeButton.setAttribute("aria-label", `${comparisonTargetName(weapon)}を削除`);
+    removeButton.addEventListener("click", (event) => {
+      event.preventDefault();
+      ownedWeapons = ownedWeapons.filter((candidate) => candidate.id !== weapon.id);
+      persistOwnedWeapons();
+      renderOwnedWeaponSection();
+      void refreshComparisonPredictions();
+    });
+    summary.append(name, state, removeButton);
+
+    const body = document.createElement("div");
+    body.className = "weapon-filter-body";
+    const renameLabel = document.createElement("label");
+    const renameText = document.createElement("span");
+    const renameInput = document.createElement("input");
+    renameText.textContent = "名前";
+    renameInput.type = "text";
+    renameInput.maxLength = 24;
+    renameInput.value = weapon.label;
+    renameInput.placeholder = ownedWeaponDefaultName(weapon);
+    renameLabel.append(renameText, renameInput);
+    const cardSlots = document.createElement("div");
+    cardSlots.className = "owned-weapon-slots";
+    cardSlots.append(...createOwnedSlotSelects(weapon.weaponType, weapon.attributeForce, weapon.categories));
+    const cardExLabel = document.createElement("label");
+    const cardExText = document.createElement("span");
+    const cardExSelect = createMinExSelect(weapon.minEx);
+    cardExText.textContent = "希望";
+    cardExLabel.append(cardExText, cardExSelect);
+    const save = () => {
+      weapon.label = renameInput.value.trim();
+      weapon.categories = readSlotSelects(cardSlots);
+      weapon.minEx = Number(cardExSelect.value);
+      name.textContent = comparisonTargetName(weapon);
+      updateState();
+      persistOwnedWeapons();
+      void refreshComparisonPredictions();
+    };
+    renameInput.addEventListener("change", save);
+    cardSlots.addEventListener("change", save);
+    cardExSelect.addEventListener("change", save);
+    body.append(renameLabel, cardSlots, cardExLabel);
+    card.append(summary, body);
+    return card;
+  });
+
+  const listTitle = document.createElement("p");
+  listTitle.className = "weapon-filter-empty";
+  listTitle.textContent = ownedWeapons.length === 0
+    ? "まだ登録がありません。表の「採用して手持ちに登録」からも登録できます。"
+    : `登録済み ${ownedWeapons.length}本（名前を押すと構成を直せます）`;
+
+  ownedWeaponSection.replaceChildren(intro, form, listTitle, ...cards);
+}
+
 function updateComparisonStatus() {
-  if (comparisonTargets.length === 0) {
+  if (comparisonTargets.length === 0 && ownedWeapons.length === 0) {
     comparisonStatus.textContent = "予測対象を登録してください";
   } else if (!selectedCandidate) {
     comparisonStatus.textContent = `${comparisonTargets.length.toLocaleString("ja-JP")}件・基準seedと復元カウンター待ち`;
