@@ -411,6 +411,13 @@ document.head.append(Object.assign(document.createElement("style"), {
     .owned-weapon-form .small-button { justify-self: start; }
     .owned-weapon-card .weapon-filter-name { color: #8fe0d6; }
     .owned-weapon-card .weapon-filter-body > label { max-width: 300px; }
+    .owned-rule-controls { display: grid; grid-template-columns: minmax(0, 420px) minmax(0, 160px); gap: 8px; }
+    .owned-rule-controls label { display: grid; gap: 4px; font-size: 0.76rem; font-weight: 700; }
+    .owned-rule-controls label[hidden] { display: none; }
+    .owned-rule-controls select { height: 38px; }
+    .bonus-tag .tier-up { margin-left: 2px; color: #7dff8a; font-weight: 900; text-shadow: 0 0 6px rgb(125 255 138 / 60%); }
+    .bonus-tag .tier-down { margin-left: 2px; color: #ff7a6b; font-weight: 900; }
+    .owned-update-button { border-color: #4f9a92; color: #bff3ec; }
     .owned-remove-button { margin-left: auto; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 50%; background: #30332b; color: #c9c6b8; cursor: pointer; }
     .owned-remove-button:hover { background: #5a2e28; color: #fff; }
     .column-kind { display: block; margin-bottom: 2px; font-size: 0.62rem; font-weight: 700; letter-spacing: 0; color: #a9a690; }
@@ -615,6 +622,12 @@ bonusPrediction.mode = "reset";
 // 手持ち武器 [{ id, label, weaponType, attributeForce, categories: 1〜5枠目の系統, minEx }]
 const OWNED_WEAPONS_KEY = "gogma-seed-finder-owned-weapons-v1";
 const MAX_OWNED_WEAPONS = 60;
+// 手持ち武器を「一致」にする条件
+const OWNED_RULE_OPTIONS = [
+  ["upgrade", "今より強くなる（どの枠も下がらず、1つ以上上がる）"],
+  ["total", "合計で強くなる（下がる枠があっても全体で上がる）"],
+  ["ex", "EXの数で判定"],
+];
 let ownedWeapons = loadOwnedWeapons();
 let ownedWeaponSection = null;
 // 武器種ごとの希望ボーナス { [weaponType]: { counts: [攻撃, 会心, 属性, 斬れ味・装填] } }
@@ -2962,6 +2975,7 @@ function createComparisonRow(index) {
     }
     if (target.kind === "owned") {
       cell.classList.add("owned-result-cell");
+      bonusSet.append(createAdoptOwnedUpdateButton(target, target.rolls[index], index + 1));
     } else {
       bonusSet.append(createAdoptAsOwnedButton(target, target.rolls[index], index + 1));
     }
@@ -2984,13 +2998,53 @@ function createComparisonRow(index) {
 function createCompactBonusSet(target, bonusIds) {
   const bonusSet = document.createElement("div");
   bonusSet.className = "comparison-bonus-set";
-  for (const bonusId of bonusIds) {
+  // 手持ち武器は、今のボーナスと枠ごとに比べて ↑（上がる）／↓（下がる）を付ける
+  const current = target.kind === "owned" && ownedBonusesKnown(target) ? target.bonuses : null;
+  bonusIds.forEach((bonusId, slotIndex) => {
     const tag = document.createElement("span");
     tag.className = `bonus-tag compact ${bonusClassName(bonusId)}${EX_BONUS_IDS.has(bonusId) ? " ex" : ""}`;
     tag.textContent = compactGogmaBonusName(target.weaponType, bonusId);
+    if (current) {
+      const diff = bonusTierRank(bonusId) - bonusTierRank(current[slotIndex]);
+      if (diff !== 0) {
+        const arrow = document.createElement("span");
+        arrow.className = diff > 0 ? "tier-up" : "tier-down";
+        arrow.textContent = diff > 0 ? "↑" : "↓";
+        tag.append(arrow);
+      }
+    }
     bonusSet.append(tag);
-  }
+  });
   return bonusSet;
+}
+
+// 同じ系統の中での段階（II・斬れ味強化・属性II＜III＜EX）
+function bonusTierRank(bonusId) {
+  if ([15, 16, 14, 10].includes(bonusId)) return 3;
+  if ([12, 13].includes(bonusId)) return 2;
+  return 1;
+}
+
+function ownedBonusesKnown(weapon) {
+  return Array.isArray(weapon.bonuses) && weapon.bonuses.every((bonusId) => bonusId !== null);
+}
+
+// 手持ち武器の判定。「同じ構成で再復元」は枠ごとの系統が変わらないので、枠ごとに段階を比べられる
+function ownedRollMatches(weapon, bonusIds) {
+  if (weapon.rule === "ex" || !ownedBonusesKnown(weapon)) {
+    return weapon.rule === "ex" && weapon.minEx > 0
+      && bonusIds.filter((bonusId) => EX_BONUS_IDS.has(bonusId)).length >= weapon.minEx;
+  }
+  const diffs = bonusIds.map((bonusId, slotIndex) =>
+    bonusTierRank(bonusId) - bonusTierRank(weapon.bonuses[slotIndex]));
+  if (weapon.rule === "total") return diffs.reduce((sum, diff) => sum + diff, 0) > 0;
+  return diffs.every((diff) => diff >= 0) && diffs.some((diff) => diff > 0);
+}
+
+function ownedRuleText(weapon) {
+  if (weapon.rule === "ex") return `EX ${weapon.minEx}個以上`;
+  if (!ownedBonusesKnown(weapon)) return "今のボーナスを入れると判定できます";
+  return weapon.rule === "total" ? "合計で今より強い" : "今より強い（上位互換）";
 }
 
 function persistBonusWishes() {
@@ -3016,13 +3070,13 @@ function bonusWishTotal(wish) {
 // 狙い（リセット）は武器種ごとの希望、手持ち（同じ構成）は武器ごとのEX数
 function targetHasWish(target) {
   return target.kind === "owned"
-    ? target.minEx > 0
+    ? (target.rule === "ex" ? target.minEx > 0 : ownedBonusesKnown(target))
     : bonusWishTotal(bonusWishFor(target.weaponType)) > 0;
 }
 
 function targetWishText(target) {
   return target.kind === "owned"
-    ? `同じ構成でEX ${target.minEx}個以上`
+    ? `同じ構成で${ownedRuleText(target)}`
     : `リセットで ${bonusWishText(target.weaponType)}`;
 }
 
@@ -3036,10 +3090,7 @@ function bonusWishText(weaponType) {
 
 // リセット：系統の数（順不同・II/III/EXは区別しない）を満たすか。手持ち：EXの数が最低数以上か
 function rollMatchesBonusWish(target, bonusIds) {
-  if (target.kind === "owned") {
-    return target.minEx > 0
-      && bonusIds.filter((bonusId) => EX_BONUS_IDS.has(bonusId)).length >= target.minEx;
-  }
+  if (target.kind === "owned") return ownedRollMatches(target, bonusIds);
   const wish = bonusWishFor(target.weaponType);
   const total = bonusWishTotal(wish);
   if (total === 0 || total > 5) return false;
@@ -3286,14 +3337,27 @@ function loadOwnedWeapons() {
         Number.isSafeInteger(weapon?.weaponType) && weapon.weaponType >= 0 && weapon.weaponType <= 13 &&
         Number.isSafeInteger(weapon?.attributeForce) && weapon.attributeForce >= 0 && weapon.attributeForce <= 9)
       .slice(0, MAX_OWNED_WEAPONS)
-      .map((weapon) => ({
-        id: typeof weapon.id === "string" && weapon.id ? weapon.id : createTargetId(),
-        label: typeof weapon.label === "string" ? weapon.label.slice(0, 24) : "",
-        weaponType: weapon.weaponType,
-        attributeForce: weapon.attributeForce,
-        categories: normalizeKeepCategories(weapon.categories),
-        minEx: Math.max(1, Math.min(5, Math.trunc(Number(weapon.minEx) || 2))),
-      }));
+      .map((weapon) => {
+        const validIds = new Set(GOGMA_BONUSES.map(([id]) => id));
+        const bonuses = Array.isArray(weapon.bonuses) && weapon.bonuses.length === 5
+          ? weapon.bonuses.map((bonusId) => validIds.has(bonusId) ? bonusId : null)
+          : [null, null, null, null, null];
+        const savedCategories = normalizeKeepCategories(weapon.categories);
+        return {
+          id: typeof weapon.id === "string" && weapon.id ? weapon.id : createTargetId(),
+          label: typeof weapon.label === "string" ? weapon.label.slice(0, 24) : "",
+          weaponType: weapon.weaponType,
+          attributeForce: weapon.attributeForce,
+          bonuses,
+          // 今のボーナスが分かる枠はそこから系統を決める（以前の登録は系統だけのこともある）
+          categories: bonuses.map((bonusId, slotIndex) =>
+            bonusId === null ? savedCategories[slotIndex] : bonusCategoryId(bonusId)),
+          rule: OWNED_RULE_OPTIONS.some(([value]) => value === weapon.rule)
+            ? weapon.rule
+            : (Array.isArray(weapon.bonuses) ? "upgrade" : "ex"),
+          minEx: Math.max(1, Math.min(5, Math.trunc(Number(weapon.minEx) || 2))),
+        };
+      });
   } catch {
     return [];
   }
@@ -3318,8 +3382,11 @@ function ownedWeaponDefaultName(weapon) {
   );
 }
 
-// 例：「攻 攻 攻 攻 属」
+// 例：「攻III 攻EX 攻II 攻II 属EX」（今のボーナスが分からないときは「攻 攻 攻 攻 属」）
 function ownedLayoutText(weapon) {
+  if (ownedBonusesKnown(weapon)) {
+    return weapon.bonuses.map((bonusId) => compactGogmaBonusName(weapon.weaponType, bonusId)).join(" ");
+  }
   const names = new Map(keepCategoriesForWeapon(weapon.weaponType, weapon.attributeForce));
   return normalizeKeepCategories(weapon.categories)
     .map((category) => category === null ? "？" : (names.get(category) ?? "？").slice(0, 1))
@@ -3348,6 +3415,7 @@ async function adoptResetAsOwned(target, bonusIds, completedRolls) {
   )) {
     weapon = sameKind[0];
     weapon.categories = categories;
+    weapon.bonuses = [...bonusIds];
   } else {
     if (ownedWeapons.length >= MAX_OWNED_WEAPONS) {
       showComparisonError(`手持ち武器は最大${MAX_OWNED_WEAPONS}本です。不要な武器を削除してください。`);
@@ -3358,7 +3426,9 @@ async function adoptResetAsOwned(target, bonusIds, completedRolls) {
       label: "",
       weaponType: target.weaponType,
       attributeForce: target.attributeForce,
+      bonuses: [...bonusIds],
       categories,
+      rule: "upgrade",
       minEx: 2,
     };
     ownedWeapons.push(weapon);
@@ -3369,17 +3439,72 @@ async function adoptResetAsOwned(target, bonusIds, completedRolls) {
   bonusStateMessage.textContent = `${completedRolls}回先の結果を採用して0地点を進め、「${comparisonTargetName(weapon)}」を手持ち武器（${ownedLayoutText(weapon)}）として登録しました。`;
 }
 
-function createOwnedSlotSelects(weaponType, attributeForce, categories) {
-  const options = keepCategoriesForWeapon(weaponType, attributeForce);
+function createAdoptOwnedUpdateButton(target, bonusIds, completedRolls) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "keep-transition-button owned-update-button";
+  button.textContent = "採用して手持ちを更新";
+  button.title = "この結果を採用してセーブしたものとして0地点を進め、この手持ち武器の今のボーナスを書き換えます";
+  button.addEventListener("click", () => void adoptOwnedUpdate(target, bonusIds, completedRolls));
+  return button;
+}
+
+// 同じ構成の結果を採用：手持ち武器の今のボーナスを更新して、0地点を進める
+async function adoptOwnedUpdate(target, bonusIds, completedRolls) {
+  const weapon = ownedWeapons.find((candidate) => candidate.id === target.id);
+  if (!weapon) return;
+  weapon.bonuses = [...bonusIds];
+  weapon.categories = bonusIds.map(bonusCategoryId);
+  persistOwnedWeapons();
+  renderOwnedWeaponSection();
+  await adoptBonusPosition(completedRolls);
+  bonusStateMessage.textContent = `${completedRolls}回先の結果を採用して0地点を進め、「${comparisonTargetName(weapon)}」を ${ownedLayoutText(weapon)} に更新しました。`;
+}
+
+// 1〜5枠目の今のボーナス（II・III・EXまで）を選ぶ欄
+function createOwnedSlotSelects(weaponType, attributeForce, bonuses) {
+  const options = gogmaBonusesForWeapon(weaponType, attributeForce);
   return Array.from({ length: 5 }, (_, slotIndex) => {
     const label = document.createElement("label");
     const text = document.createElement("span");
     const select = document.createElement("select");
     text.textContent = `${slotIndex + 1}枠目`;
-    populateSelect(select, [["", "選択"], ...options], categories[slotIndex] ?? "");
+    populateSelect(select, [["", "選択"], ...options], bonuses[slotIndex] ?? "");
     label.append(text, select);
     return label;
   });
+}
+
+function createOwnedRuleControls(weapon) {
+  const wrap = document.createElement("div");
+  wrap.className = "owned-rule-controls";
+  const ruleLabel = document.createElement("label");
+  const ruleText = document.createElement("span");
+  const ruleSelect = document.createElement("select");
+  ruleText.textContent = "一致にする条件";
+  populateSelect(ruleSelect, OWNED_RULE_OPTIONS, weapon.rule);
+  ruleLabel.append(ruleText, ruleSelect);
+  const exLabel = document.createElement("label");
+  const exText = document.createElement("span");
+  const exSelect = createMinExSelect(weapon.minEx);
+  exText.textContent = "EXの数";
+  exLabel.append(exText, exSelect);
+  const syncVisibility = () => { exLabel.hidden = ruleSelect.value !== "ex"; };
+  ruleSelect.addEventListener("change", syncVisibility);
+  syncVisibility();
+  wrap.append(ruleLabel, exLabel);
+  return { wrap, ruleSelect, exSelect };
+}
+
+function ownedWeaponFromInputs(base, slotsContainer, ruleSelect, exSelect) {
+  const bonuses = readSlotSelects(slotsContainer);
+  return {
+    ...base,
+    bonuses,
+    categories: bonuses.map((bonusId) => bonusId === null ? null : bonusCategoryId(bonusId)),
+    rule: ruleSelect.value,
+    minEx: Number(exSelect.value),
+  };
 }
 
 function readSlotSelects(container) {
@@ -3404,7 +3529,7 @@ function renderOwnedWeaponSection() {
   const title = document.createElement("strong");
   title.textContent = "手持ち武器（同じ構成で再復元＝EX厳選）";
   const description = document.createElement("p");
-  description.textContent = "実際に持っている武器を登録すると、「同じ構成で再復元」したときの結果が表に並び、EXが希望の数以上つく回が「一致」列に出ます。構成はゲーム画面の1枠目〜5枠目の順番どおりに入れてください（順番が違うと予測がずれます）。";
+  description.textContent = "実際に持っている武器と今のボーナスを登録すると、「同じ構成で再復元」したときの結果が表に並び、今より強くなる回が「一致」列に出ます（表の↑↓は今と比べて上がる／下がる枠）。ゲーム画面の1枠目〜5枠目の順番どおりに入れてください（順番が違うと予測がずれます）。";
   intro.append(title, description);
 
   // 追加フォーム
@@ -3430,11 +3555,7 @@ function renderOwnedWeaponSection() {
   attributeText.textContent = "属性";
   populateSelect(attributeSelectEl, ATTRIBUTES, Number(comparisonAttributeSelect.value));
   attributeLabel.append(attributeText, attributeSelectEl);
-  const exLabel = document.createElement("label");
-  const exText = document.createElement("span");
-  const exSelect = createMinExSelect(2);
-  exText.textContent = "希望";
-  exLabel.append(exText, exSelect);
+  const formRule = createOwnedRuleControls({ rule: "upgrade", minEx: 2 });
   const slots = document.createElement("div");
   slots.className = "owned-weapon-slots";
   const renderFormSlots = () => {
@@ -3453,14 +3574,12 @@ function renderOwnedWeaponSection() {
   error.className = "error";
   error.hidden = true;
   addButton.addEventListener("click", () => {
-    const weapon = {
+    const weapon = ownedWeaponFromInputs({
       id: createTargetId(),
       label: nameInput.value.trim(),
       weaponType: Number(weaponSelectEl.value),
       attributeForce: Number(attributeSelectEl.value),
-      categories: readSlotSelects(slots),
-      minEx: Number(exSelect.value),
-    };
+    }, slots, formRule.ruleSelect, formRule.exSelect);
     const problem = ownedWeaponProblem(weapon);
     if (problem) {
       error.textContent = problem;
@@ -3479,8 +3598,8 @@ function renderOwnedWeaponSection() {
   });
   const formRow = document.createElement("div");
   formRow.className = "owned-weapon-form-row";
-  formRow.append(nameLabel, weaponLabel, attributeLabel, exLabel);
-  form.append(formRow, slots, addButton, error);
+  formRow.append(nameLabel, weaponLabel, attributeLabel);
+  form.append(formRow, slots, formRule.wrap, addButton, error);
 
   // 登録済みの手持ち武器
   const cards = ownedWeapons.map((weapon) => {
@@ -3498,7 +3617,7 @@ function renderOwnedWeaponSection() {
       const currentProblem = ownedWeaponProblem(weapon);
       state.textContent = currentProblem
         ? `⚠ ${currentProblem}`
-        : `${t(optionName(WEAPON_TYPES, weapon.weaponType))}・${t(optionName(ATTRIBUTES, weapon.attributeForce))}｜${ownedLayoutText(weapon)}｜EX ${weapon.minEx}個以上で一致`;
+        : `${t(optionName(WEAPON_TYPES, weapon.weaponType))}・${t(optionName(ATTRIBUTES, weapon.attributeForce))}｜${ownedLayoutText(weapon)}｜${ownedRuleText(weapon)}で一致`;
     };
     updateState();
     const removeButton = document.createElement("button");
@@ -3528,16 +3647,13 @@ function renderOwnedWeaponSection() {
     renameLabel.append(renameText, renameInput);
     const cardSlots = document.createElement("div");
     cardSlots.className = "owned-weapon-slots";
-    cardSlots.append(...createOwnedSlotSelects(weapon.weaponType, weapon.attributeForce, weapon.categories));
-    const cardExLabel = document.createElement("label");
-    const cardExText = document.createElement("span");
-    const cardExSelect = createMinExSelect(weapon.minEx);
-    cardExText.textContent = "希望";
-    cardExLabel.append(cardExText, cardExSelect);
+    cardSlots.append(...createOwnedSlotSelects(weapon.weaponType, weapon.attributeForce, weapon.bonuses));
+    const cardRule = createOwnedRuleControls(weapon);
     const save = () => {
-      weapon.label = renameInput.value.trim();
-      weapon.categories = readSlotSelects(cardSlots);
-      weapon.minEx = Number(cardExSelect.value);
+      const next = ownedWeaponFromInputs(weapon, cardSlots, cardRule.ruleSelect, cardRule.exSelect);
+      // 以前の登録で系統だけ分かっている枠は、ボーナスを選ぶまで系統を残す
+      next.categories = next.categories.map((category, slotIndex) => category ?? weapon.categories[slotIndex]);
+      Object.assign(weapon, next, { label: renameInput.value.trim() });
       name.textContent = comparisonTargetName(weapon);
       updateState();
       persistOwnedWeapons();
@@ -3545,8 +3661,8 @@ function renderOwnedWeaponSection() {
     };
     renameInput.addEventListener("change", save);
     cardSlots.addEventListener("change", save);
-    cardExSelect.addEventListener("change", save);
-    body.append(renameLabel, cardSlots, cardExLabel);
+    cardRule.wrap.addEventListener("change", save);
+    body.append(renameLabel, cardSlots, cardRule.wrap);
     card.append(summary, body);
     return card;
   });
