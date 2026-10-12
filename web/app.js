@@ -343,10 +343,33 @@ document.head.append(Object.assign(document.createElement("style"), {
     .observation-chip { min-width: 0; height: 38px; padding: 4px 6px; border: 1px solid #44473d; border-radius: 8px; background: #151612; color: #eee9da; font-size: 0.74rem; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: 1; }
     .observation-chip.empty { border-style: dashed; color: #8a8775; }
     .observation-chip.active { outline: 3px solid #e8c766; outline-offset: 1px; }
-    .observation-palette { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-    .observation-card { min-width: 0; padding: 5px 9px; font-size: 0.72rem; cursor: pointer; opacity: 1; }
-    .observation-card:hover { filter: brightness(1.3); }
-    .observation-clear { margin-left: auto; color: #ffffff; font-size: 0.72rem; }
+    /* ボーナスのカード：シリーズスキル選択欄と同じ形（選択中は金枠＋チェック） */
+    .observation-palette { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(170px, 100%), 1fr)); gap: 8px; }
+    .observation-card {
+      display: flex; gap: 10px; align-items: flex-start; min-width: 0;
+      padding: 9px 11px; border: 1px solid #3a3c31; border-left-width: 4px; border-radius: 8px;
+      background: rgb(0 0 0 / 18%); color: #eee9da; text-align: left; cursor: pointer;
+    }
+    .observation-card:hover { border-color: #6b6a55; background: rgb(255 255 255 / 4%); }
+    .observation-card.attack { border-left-color: #c9665a; }
+    .observation-card.affinity { border-left-color: #d6b04a; }
+    .observation-card.element { border-left-color: #5aa8c4; }
+    .observation-card.sharpness-ammo { border-left-color: #9a88d0; }
+    .observation-card > span:last-child { display: grid; gap: 2px; min-width: 0; }
+    .observation-card strong { font-size: 0.8rem; font-weight: 700; line-height: 1.35; }
+    .observation-card-sub { color: #a9a690; font-size: 0.7rem; }
+    .observation-card.ex strong { color: #ffe39a; text-shadow: 0 0 8px rgb(232 199 102 / 45%); }
+    .observation-card-mark {
+      flex: none; width: 18px; height: 18px; margin-top: 1px;
+      border: 2px solid #6b6a55; border-radius: 4px; background: #151612;
+    }
+    .observation-card.selected { border-color: #e8c766; border-left-color: #e8c766; background: rgb(214 179 92 / 14%); }
+    .observation-card.selected .observation-card-mark { border-color: #e8c766; background: #e8c766; position: relative; }
+    .observation-card.selected .observation-card-mark::after {
+      content: ""; position: absolute; left: 4px; top: 0; width: 5px; height: 10px;
+      border: solid #1a1708; border-width: 0 2px 2px 0; transform: rotate(45deg);
+    }
+    .observation-clear { grid-column: 1 / -1; justify-self: end; color: #ffffff; font-size: 0.72rem; }
     @media (max-width: 640px) {
       .observation-row.card-input { grid-template-columns: 1fr; }
       .observation-chips { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -1728,13 +1751,29 @@ function enhanceObservationRowWithCards(row) {
       });
       return chip;
     }));
+    // 選んでいる枠に入っているボーナスのカードを、チェック付きの金枠にする
+    const activeValue = selects[active]?.value ?? "";
+    cards.forEach((card) => card.classList.toggle("selected", card.dataset.bonusId === activeValue));
   };
 
+  const cards = [];
   for (const [bonusId, name] of availableGogmaBonuses()) {
     const card = document.createElement("button");
+    const mark = document.createElement("span");
+    const text = document.createElement("span");
+    const title = document.createElement("strong");
+    const sub = document.createElement("span");
     card.type = "button";
-    card.className = `observation-card bonus-tag ${bonusClassName(bonusId)}${EX_BONUS_IDS.has(bonusId) ? " ex" : ""}`;
-    card.textContent = name;
+    card.className = `observation-card ${bonusClassName(bonusId)}${EX_BONUS_IDS.has(bonusId) ? " ex" : ""}`;
+    card.dataset.bonusId = String(bonusId);
+    mark.className = "observation-card-mark";
+    title.textContent = name;
+    sub.className = "observation-card-sub";
+    const categoryName = { attack: "攻撃", affinity: "会心", element: "属性", "sharpness-ammo": BOWGUN_WEAPON_TYPES.has(weaponType) ? "装填" : "斬れ味" }[bonusClassName(bonusId)];
+    sub.textContent = EX_BONUS_IDS.has(bonusId) ? `${categoryName}系・EX` : `${categoryName}系`;
+    text.append(title, sub);
+    card.append(mark, text);
+    cards.push(card);
     card.addEventListener("click", () => {
       setValue(active, String(bonusId));
       const nextEmpty = selects.findIndex((select, index) => index > active && select.value === "");
