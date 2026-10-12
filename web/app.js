@@ -242,6 +242,13 @@ document.head.append(Object.assign(document.createElement("style"), {
     .weapon-filter-settings { display: block; }
     .weapon-filter-settings .skill-filter-intro p { margin: 4px 0 12px; color: #a9a690; font-size: 0.8rem; }
     .weapon-filter-empty { color: #a9a690; font-size: 0.8rem; }
+    /* 共通の条件（当たり強調・条件一致だけ表示）：太い金色の枠。項目はシリーズスキル欄と同じく上にそろえる */
+    .skill-filter-settings:not(.weapon-filter-settings) {
+      align-items: start;
+      border: 3px solid #b8973f;
+      border-radius: 14px;
+      background: rgb(214 179 92 / 5%);
+    }
     /* 大枠（武器種ごとの条件）：太い金色の枠 */
     .skill-filter-settings.weapon-filter-settings {
       border: 3px solid #b8973f;
@@ -2198,7 +2205,8 @@ function resetResults() {
 async function selectCandidate(candidate) {
   if (!lastSearchConfig) return;
 
-  setStateFromBonus(candidate.seed, candidate.counter, "検索結果", true);
+  // スキルカウンターは復元カウンターとは別なので、基準seedが同じなら消さない（seedが変わったときだけ消える）
+  setStateFromBonus(candidate.seed, candidate.counter, "検索結果");
   predictionOrigin.textContent = "0";
   predictionWeaponSelect.value = String(lastSearchConfig.weaponType);
   predictionAttributeSelect.value = String(lastSearchConfig.attributeForce);
