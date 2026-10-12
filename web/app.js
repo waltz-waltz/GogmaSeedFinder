@@ -314,8 +314,12 @@ document.head.append(Object.assign(document.createElement("style"), {
     .step-frame > .bonus-wish-settings:not(.owned-weapon-settings) > .skill-filter-intro { display: none; }
     /* 次の一致：希望（例：攻撃×4）と、希望に当てはまる枠の強調 */
     .bonus-wish-next-target { padding: 2px 8px; border: 1px solid #8a7a45; border-radius: 999px; color: #ffe39a; font-size: 0.72rem; font-weight: 800; }
-    .bonus-tag.wish-part { outline: 2px solid #ffe39a; outline-offset: 1px; opacity: 1; }
-    .bonus-tag.not-wish { opacity: 0.35; }
+    /* 希望に当てはまる枠：金の太い縁＋光＋明るい文字。関係ない枠：灰色で薄く */
+    .bonus-tag.wish-part {
+      opacity: 1; outline: 3px solid #ffd44d; outline-offset: 1px; font-weight: 900; color: #ffffff;
+      box-shadow: 0 0 14px rgb(255 212 77 / 70%); filter: brightness(1.25) saturate(1.3);
+    }
+    .bonus-tag.not-wish { opacity: 0.25; filter: grayscale(1); }
     /* 登録欄の切り替え */
     .registration-switch { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 4px 0 16px; }
     .registration-switch-label { color: #a9a690; font-size: 0.78rem; font-weight: 700; margin-right: 4px; }
