@@ -344,7 +344,20 @@ document.head.append(Object.assign(document.createElement("style"), {
     .observation-chip.empty { border-style: dashed; color: #8a8775; }
     .observation-chip.active { outline: 3px solid #e8c766; outline-offset: 1px; }
     /* ボーナスのカード：シリーズスキル選択欄と同じ形（選択中は金枠＋チェック） */
-    .observation-palette { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(170px, 100%), 1fr)); gap: 8px; }
+    /* 系統ごとに列を分け、見出しの下に段階（II→III→EX）を縦に並べる */
+    .observation-palette { display: grid; grid-template-columns: repeat(var(--category-count, 4), minmax(0, 1fr)); gap: 10px; align-items: start; }
+    .observation-category { display: grid; gap: 6px; min-width: 0; }
+    .observation-category-heading {
+      padding: 5px 10px; border-radius: 6px; font-size: 0.8rem; font-weight: 800; letter-spacing: 0.05em;
+      color: #f2eddc; user-select: none;
+    }
+    .observation-category.attack .observation-category-heading { background: rgb(201 102 90 / 28%); border-bottom: 2px solid #c9665a; }
+    .observation-category.affinity .observation-category-heading { background: rgb(214 176 74 / 24%); border-bottom: 2px solid #d6b04a; }
+    .observation-category.element .observation-category-heading { background: rgb(90 168 196 / 24%); border-bottom: 2px solid #5aa8c4; }
+    .observation-category.sharpness-ammo .observation-category-heading { background: rgb(154 136 208 / 24%); border-bottom: 2px solid #9a88d0; }
+    @media (max-width: 640px) {
+      .observation-palette { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
     .observation-card {
       display: flex; gap: 10px; align-items: flex-start; min-width: 0;
       padding: 9px 11px; border: 1px solid #3a3c31; border-left-width: 4px; border-radius: 8px;
@@ -369,7 +382,7 @@ document.head.append(Object.assign(document.createElement("style"), {
       content: ""; position: absolute; left: 4px; top: 0; width: 5px; height: 10px;
       border: solid #1a1708; border-width: 0 2px 2px 0; transform: rotate(45deg);
     }
-    .observation-clear { grid-column: 1 / -1; justify-self: end; color: #ffffff; font-size: 0.72rem; }
+    .observation-clear { justify-self: end; color: #ffffff; font-size: 0.72rem; }
     @media (max-width: 640px) {
       .observation-row.card-input { grid-template-columns: 1fr; }
       .observation-chips { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -1757,6 +1770,27 @@ function enhanceObservationRowWithCards(row) {
   };
 
   const cards = [];
+  // 系統ごとの列（見出し＋段階のカードを縦に並べる）
+  const categoryColumns = new Map();
+  const categoryLabel = (className) => ({
+    attack: "攻撃",
+    affinity: "会心",
+    element: "属性",
+    "sharpness-ammo": BOWGUN_WEAPON_TYPES.has(weaponType) ? "装填" : "斬れ味",
+  })[className];
+  const columnFor = (className) => {
+    if (!categoryColumns.has(className)) {
+      const column = document.createElement("div");
+      const heading = document.createElement("div");
+      column.className = `observation-category ${className}`;
+      heading.className = "observation-category-heading";
+      heading.textContent = categoryLabel(className);
+      column.append(heading);
+      categoryColumns.set(className, column);
+      palette.append(column);
+    }
+    return categoryColumns.get(className);
+  };
   for (const [bonusId, name] of availableGogmaBonuses()) {
     const card = document.createElement("button");
     const mark = document.createElement("span");
@@ -1769,11 +1803,11 @@ function enhanceObservationRowWithCards(row) {
     mark.className = "observation-card-mark";
     title.textContent = name;
     sub.className = "observation-card-sub";
-    const categoryName = { attack: "攻撃", affinity: "会心", element: "属性", "sharpness-ammo": BOWGUN_WEAPON_TYPES.has(weaponType) ? "装填" : "斬れ味" }[bonusClassName(bonusId)];
-    sub.textContent = EX_BONUS_IDS.has(bonusId) ? `${categoryName}系・EX` : `${categoryName}系`;
+    sub.textContent = EX_BONUS_IDS.has(bonusId) ? `${categoryLabel(bonusClassName(bonusId))}系・EX` : `${categoryLabel(bonusClassName(bonusId))}系`;
     text.append(title, sub);
     card.append(mark, text);
     cards.push(card);
+    columnFor(bonusClassName(bonusId)).append(card);
     card.addEventListener("click", () => {
       setValue(active, String(bonusId));
       const nextEmpty = selects.findIndex((select, index) => index > active && select.value === "");
@@ -1781,7 +1815,6 @@ function enhanceObservationRowWithCards(row) {
       else if (active < 4) active += 1;
       render();
     });
-    palette.append(card);
   }
 
   const clearButton = document.createElement("button");
@@ -1793,9 +1826,9 @@ function enhanceObservationRowWithCards(row) {
     active = 0;
     render();
   });
-  palette.append(clearButton);
+  palette.style.setProperty("--category-count", String(categoryColumns.size));
 
-  body.append(chips, palette);
+  body.append(chips, palette, clearButton);
   row.append(body);
   render();
 }
