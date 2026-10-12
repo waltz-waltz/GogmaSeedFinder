@@ -898,13 +898,12 @@ applyBonusStateButton.addEventListener("click", () => void applyBonusPredictionS
 applySkillStateButton.addEventListener("click", () => void applySkillPredictionState());
 applyManualStateButton.addEventListener("click", () => applyManualSaveState());
 
+// 「ボーナスを同じ構成で再復元」を選ぶと手持ち武器の登録欄が開き、「リセット」を選ぶと閉じる
 document.querySelector("#bonus-operation-selector").addEventListener("change", () => {
-  bonusPrediction.mode = bonusOperationKeep.checked ? "keep" : "reset";
+  const view = loadBonusView();
+  view.registration = bonusOperationKeep.checked ? "owned" : "reset";
+  persistBonusView(view);
   renderBonusOperation();
-  persistAppState();
-  renderPredictionFilters();
-  updatePredictionPoolNote();
-  void Promise.all([refreshPredictions(), refreshComparisonPredictions()]);
 });
 
 openContinuationButton.addEventListener("click", () => void openContinuationCode());
@@ -1223,9 +1222,13 @@ function renderBonusOperation() {
   keepLayoutPanel.hidden = !keepMode;
   detailPredictionSection.hidden = keepMode;
   bonusFutureKicker.textContent = "BONUS FUTURE";
-  // 切り替え欄は使わない（手持ち武器の登録で「同じ構成で再復元」も同じ表に出す）
-  const operationSection = document.querySelector(".bonus-operation-section");
-  if (operationSection) operationSection.style.display = "none";
+  // 「ゲーム内で行う再復元」の2つのボタンは、手持ち武器の登録欄の開け閉めに使う。
+  // 予測のしかたは切り替えない（表には狙い＝リセットと手持ち＝同じ構成の両方が出る）
+  keepLayoutPanel.hidden = true;
+  const ownedOpen = loadBonusView().registration === "owned";
+  bonusOperationReset.checked = !ownedOpen;
+  bonusOperationKeep.checked = ownedOpen;
+  if (ownedWeaponSection) ownedWeaponSection.style.display = ownedOpen ? "" : "none";
   renderKeepLayoutInputs();
   updateComparisonStatus();
 }
@@ -1824,11 +1827,27 @@ function createObservationRow(values = null) {
 // 値は隠したプルダウンに入れるので、検索側の読み取りはそのまま。
 function enhanceObservationRowWithCards(row) {
   row.classList.add("card-input");
-  const weaponType = Number(weaponSelect.value);
   const selects = [...row.querySelectorAll("select")];
   // 隠したプルダウンが未入力だとブラウザが送信を黙って止めるので、未入力チェックは検索側に任せる
   selects.forEach((select) => { select.required = false; });
-  const firstEmpty = selects.findIndex((select) => select.value === "");
+  const picker = createBonusCardPicker({
+    weaponType: Number(weaponSelect.value),
+    options: availableGogmaBonuses(),
+    values: selects.map((select) => select.value === "" ? null : Number(select.value)),
+    clearText: "この回をクリア",
+    onChange: (index, bonusId) => {
+      selects[index].value = bonusId === null ? "" : String(bonusId);
+      selects[index].dispatchEvent(new Event("change", { bubbles: true }));
+    },
+  });
+  row.append(picker.element);
+}
+
+// 5枠のボーナスをカードで選ぶ部品（左：1〜5枠目、右：系統ごとのカード）。
+// seed検索の結果入力と、手持ち武器の登録で使う
+function createBonusCardPicker({ weaponType, options, values, onChange, clearText = "5枠をクリア" }) {
+  const current = Array.from({ length: 5 }, (_, index) => values?.[index] ?? null);
+  const firstEmpty = current.findIndex((value) => value === null);
   let active = firstEmpty === -1 ? 0 : firstEmpty;
 
   const body = document.createElement("div");
@@ -1838,17 +1857,16 @@ function enhanceObservationRowWithCards(row) {
   const palette = document.createElement("div");
   palette.className = "observation-palette";
 
-  const setValue = (index, value) => {
-    selects[index].value = value;
-    selects[index].dispatchEvent(new Event("change", { bubbles: true }));
+  const setValue = (index, bonusId) => {
+    current[index] = bonusId;
+    onChange?.(index, bonusId, [...current]);
   };
 
   const render = () => {
-    chips.replaceChildren(...selects.map((select, index) => {
+    chips.replaceChildren(...current.map((bonusId, index) => {
       const chip = document.createElement("button");
       const slotName = document.createElement("span");
       const value = document.createElement("span");
-      const bonusId = select.value === "" ? null : Number(select.value);
       chip.type = "button";
       chip.className = "observation-chip";
       slotName.className = "observation-chip-slot";
@@ -1878,7 +1896,7 @@ function enhanceObservationRowWithCards(row) {
       return chip;
     }));
     // 選んでいる枠に入っているボーナスのカードを、チェック付きの金枠にする
-    const activeValue = selects[active]?.value ?? "";
+    const activeValue = current[active] === null ? "" : String(current[active]);
     cards.forEach((card) => card.classList.toggle("selected", card.dataset.bonusId === activeValue));
   };
 
@@ -1904,7 +1922,7 @@ function enhanceObservationRowWithCards(row) {
     }
     return categoryColumns.get(className);
   };
-  for (const [bonusId, name] of availableGogmaBonuses()) {
+  for (const [bonusId, name] of options) {
     const card = document.createElement("button");
     const mark = document.createElement("span");
     const text = document.createElement("span");
@@ -1922,8 +1940,8 @@ function enhanceObservationRowWithCards(row) {
     cards.push(card);
     columnFor(bonusClassName(bonusId)).append(card);
     card.addEventListener("click", () => {
-      setValue(active, String(bonusId));
-      const nextEmpty = selects.findIndex((select, index) => index > active && select.value === "");
+      setValue(active, bonusId);
+      const nextEmpty = current.findIndex((value, index) => index > active && value === null);
       if (nextEmpty !== -1) active = nextEmpty;
       else if (active < 4) active += 1;
       render();
@@ -1933,9 +1951,9 @@ function enhanceObservationRowWithCards(row) {
   const clearButton = document.createElement("button");
   clearButton.type = "button";
   clearButton.className = "text-button observation-clear";
-  clearButton.textContent = "この回をクリア";
+  clearButton.textContent = clearText;
   clearButton.addEventListener("click", () => {
-    selects.forEach((_, index) => setValue(index, ""));
+    current.forEach((_, index) => setValue(index, null));
     active = 0;
     render();
   });
@@ -1948,8 +1966,8 @@ function enhanceObservationRowWithCards(row) {
   slotHint.textContent = "枠を押して選び、右のカードで入力";
   slotColumn.append(slotHint, chips, clearButton);
   body.append(slotColumn, palette);
-  row.append(body);
   render();
+  return { element: body, getValues: () => [...current] };
 }
 
 function renumberObservationRows() {
@@ -3273,15 +3291,19 @@ function setupComparisonFrames() {
     return frame;
   };
 
-  const step1 = createStep("1", "武器を登録する",
-    "「狙い」はリセットして再復元で狙う武器種・属性、「手持ち武器」は持っている武器（同じ構成で再復元してEXを厳選する武器）です。下のボタンで、どちらを登録するか切り替えます。");
+  const step1 = createStep("1", "狙いの武器を登録する",
+    "リセットして再復元で狙う武器種・属性を登録します。持っている武器を「同じ構成で再復元」してEXを厳選したいときは、上の「ゲーム内で行う再復元」で「ボーナスを同じ構成で再復元」を選ぶと、手持ち武器の登録欄が開きます。");
   step1.append(...[
     document.querySelector(".comparison-settings"),
     document.querySelector(".comparison-actions"),
     comparisonTargetList,
     comparisonError,
-    ownedWeaponSection,
   ].filter(Boolean));
+
+  // 手持ち武器の登録欄は「ゲーム内で行う再復元」の2つのボタンのすぐ下に置く
+  const operationSelector = document.querySelector("#bonus-operation-selector");
+  if (operationSelector) operationSelector.after(ownedWeaponSection);
+  else step1.append(ownedWeaponSection);
 
   const step2 = createStep("2", "希望ボーナスを決める（狙い）",
     "狙いの武器種ごとに、リセットで欲しい系統の数を決めます。手持ち武器の条件は、①の「手持ち武器」の欄で武器ごとに決めます。");
@@ -3339,48 +3361,18 @@ function updateRegisteredListTitles() {
 }
 
 // 登録欄の切り替え：「狙い（リセット）」と「手持ち武器（同じ構成）」のどちらか一方だけを出す
+// 「ゲーム内で行う再復元」の説明を、手持ち武器の登録欄の開け閉めに合わせて書き直す
 function setupRegistrationSwitch() {
-  const view = loadBonusView();
-  const resetParts = [
-    document.querySelector(".comparison-settings"),
-    document.querySelector(".comparison-actions"),
-    comparisonTargetList.closest("details") ?? comparisonTargetList,
-    bonusWishSection.closest(".step-frame") ?? bonusWishSection,
-  ].filter(Boolean);
   const intro = document.querySelector(".comparison-section .prediction-intro");
   if (intro) {
-    intro.textContent = "登録した武器ぜんぶについて、これから何回再復元すると希望のボーナスが出るかを予測します。①で武器を登録し、②で希望を決めると、③に結果が出ます。";
+    intro.textContent = "登録した武器ぜんぶについて、これから何回再復元すると希望のボーナスが出るかを予測します。①で狙いの武器を登録し、②で希望を決めると、③に結果が出ます（上で登録した手持ち武器も③に出ます）。";
   }
-
-  const switcher = document.createElement("div");
-  switcher.className = "registration-switch";
-  const label = document.createElement("span");
-  label.className = "registration-switch-label";
-  label.textContent = "登録する";
-  const buttons = [
-    ["reset", "狙い（リセットして再復元）"],
-    ["owned", "手持ち武器（同じ構成で再復元）"],
-  ].map(([value, text]) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.dataset.value = value;
-    button.textContent = text;
-    return button;
-  });
-  const apply = (value) => {
-    buttons.forEach((button) => button.classList.toggle("active", button.dataset.value === value));
-    resetParts.forEach((part) => { part.style.display = value === "reset" ? "" : "none"; });
-    ownedWeaponSection.style.display = value === "owned" ? "" : "none";
-  };
-  buttons.forEach((button) => button.addEventListener("click", () => {
-    const next = loadBonusView();
-    next.registration = button.dataset.value;
-    persistBonusView(next);
-    apply(button.dataset.value);
-  }));
-  switcher.append(label, ...buttons);
-  (document.querySelector(".comparison-settings") ?? comparisonTargetList).before(switcher);
-  apply(view.registration);
+  const operationSection = document.querySelector(".bonus-operation-section");
+  const description = operationSection?.querySelector("p:not(.step)");
+  if (description) {
+    description.textContent = "「ボーナスを同じ構成で再復元」を選ぶと、手持ち武器（同じ構成で再復元してEXを厳選する武器）の登録欄が下に開きます。どちらを選んでも、下の結果には狙い（リセット）と手持ち武器（同じ構成）の両方が出ます。";
+  }
+  renderBonusOperation();
 }
 
 // 表のすぐ上に「表示する回数」と表示の切り替えをまとめる
@@ -3801,17 +3793,15 @@ async function adoptOwnedUpdate(target, bonusIds, completedRolls) {
   bonusStateMessage.textContent = `${completedRolls}回先の結果を採用して0地点を進め、「${comparisonTargetName(weapon)}」を ${ownedLayoutText(weapon)} に更新しました。`;
 }
 
-// 1〜5枠目の今のボーナス（II・III・EXまで）を選ぶ欄
-function createOwnedSlotSelects(weaponType, attributeForce, bonuses) {
+// 1〜5枠目の今のボーナス（II・III・EXまで）をカードで選ぶ欄。その武器で出ないボーナスは外す
+function createOwnedBonusPicker(weaponType, attributeForce, bonuses, onChange) {
   const options = gogmaBonusesForWeapon(weaponType, attributeForce);
-  return Array.from({ length: 5 }, (_, slotIndex) => {
-    const label = document.createElement("label");
-    const text = document.createElement("span");
-    const select = document.createElement("select");
-    text.textContent = `${slotIndex + 1}枠目`;
-    populateSelect(select, [["", "選択"], ...options], bonuses[slotIndex] ?? "");
-    label.append(text, select);
-    return label;
+  const available = new Set(options.map(([id]) => id));
+  return createBonusCardPicker({
+    weaponType,
+    options,
+    values: bonuses.map((bonusId) => available.has(bonusId) ? bonusId : null),
+    onChange: (_, __, values) => onChange(values),
   });
 }
 
@@ -3836,8 +3826,7 @@ function createOwnedRuleControls(weapon) {
   return { wrap, ruleSelect, exSelect };
 }
 
-function ownedWeaponFromInputs(base, slotsContainer, ruleSelect, exSelect) {
-  const bonuses = readSlotSelects(slotsContainer);
+function ownedWeaponFromInputs(base, bonuses, ruleSelect, exSelect) {
   return {
     ...base,
     bonuses,
@@ -3845,11 +3834,6 @@ function ownedWeaponFromInputs(base, slotsContainer, ruleSelect, exSelect) {
     rule: ruleSelect.value,
     minEx: Number(exSelect.value),
   };
-}
-
-function readSlotSelects(container) {
-  return [...container.querySelectorAll("select")].map((select) =>
-    select.value === "" ? null : Number(select.value));
 }
 
 function createMinExSelect(value) {
@@ -3897,11 +3881,15 @@ function renderOwnedWeaponSection() {
   attributeLabel.append(attributeText, attributeSelectEl);
   const formRule = createOwnedRuleControls({ rule: "upgrade", minEx: 2 });
   const slots = document.createElement("div");
-  slots.className = "owned-weapon-slots";
+  slots.className = "owned-weapon-picker";
+  let formBonuses = [null, null, null, null, null];
   const renderFormSlots = () => {
-    const current = readSlotSelects(slots);
-    slots.replaceChildren(...createOwnedSlotSelects(
-      Number(weaponSelectEl.value), Number(attributeSelectEl.value), current));
+    const picker = createOwnedBonusPicker(
+      Number(weaponSelectEl.value), Number(attributeSelectEl.value), formBonuses,
+      (values) => { formBonuses = values; },
+    );
+    formBonuses = picker.getValues();
+    slots.replaceChildren(picker.element);
   };
   renderFormSlots();
   weaponSelectEl.addEventListener("change", renderFormSlots);
@@ -3919,7 +3907,7 @@ function renderOwnedWeaponSection() {
       label: nameInput.value.trim(),
       weaponType: Number(weaponSelectEl.value),
       attributeForce: Number(attributeSelectEl.value),
-    }, slots, formRule.ruleSelect, formRule.exSelect);
+    }, formBonuses, formRule.ruleSelect, formRule.exSelect);
     const problem = ownedWeaponProblem(weapon);
     if (problem) {
       error.textContent = problem;
@@ -3985,12 +3973,10 @@ function renderOwnedWeaponSection() {
     renameInput.value = weapon.label;
     renameInput.placeholder = ownedWeaponDefaultName(weapon);
     renameLabel.append(renameText, renameInput);
-    const cardSlots = document.createElement("div");
-    cardSlots.className = "owned-weapon-slots";
-    cardSlots.append(...createOwnedSlotSelects(weapon.weaponType, weapon.attributeForce, weapon.bonuses));
+    let cardBonuses = [...weapon.bonuses];
     const cardRule = createOwnedRuleControls(weapon);
     const save = () => {
-      const next = ownedWeaponFromInputs(weapon, cardSlots, cardRule.ruleSelect, cardRule.exSelect);
+      const next = ownedWeaponFromInputs(weapon, cardBonuses, cardRule.ruleSelect, cardRule.exSelect);
       // 以前の登録で系統だけ分かっている枠は、ボーナスを選ぶまで系統を残す
       next.categories = next.categories.map((category, slotIndex) => category ?? weapon.categories[slotIndex]);
       Object.assign(weapon, next, { label: renameInput.value.trim() });
@@ -3999,8 +3985,15 @@ function renderOwnedWeaponSection() {
       persistOwnedWeapons();
       void refreshComparisonPredictions();
     };
+    const cardPicker = createOwnedBonusPicker(weapon.weaponType, weapon.attributeForce, cardBonuses, (values) => {
+      cardBonuses = values;
+      save();
+    });
+    cardBonuses = cardPicker.getValues();
+    const cardSlots = document.createElement("div");
+    cardSlots.className = "owned-weapon-picker";
+    cardSlots.append(cardPicker.element);
     renameInput.addEventListener("change", save);
-    cardSlots.addEventListener("change", save);
     cardRule.wrap.addEventListener("change", save);
     body.append(renameLabel, cardSlots, cardRule.wrap);
     card.append(summary, body);
