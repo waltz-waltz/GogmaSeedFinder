@@ -335,14 +335,30 @@ document.head.append(Object.assign(document.createElement("style"), {
     .detail-bonus-set { display: flex; flex-wrap: wrap; gap: 5px; }
     .detail-bonus-set .bonus-tag { min-width: 112px; padding: 5px 7px; }
     /* seed・復元カウンター検索：連続した復元ボーナス結果をカードで入力 */
-    .observation-row.card-input { display: grid; grid-template-columns: 70px minmax(0, 1fr); gap: 10px; align-items: start; }
+    /* 左：1〜5枠目を縦に並べた枠リスト（押して入力先を選ぶ）／右：系統ごとのカード */
+    .observation-row.card-input { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; align-items: start; padding: 14px; }
     .observation-row.card-input > label { display: none; }
-    .observation-row.card-input .roll-number { padding-top: 8px; }
-    .observation-card-body { display: grid; gap: 8px; min-width: 0; }
-    .observation-chips { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
-    .observation-chip { min-width: 0; height: 38px; padding: 4px 6px; border: 1px solid #44473d; border-radius: 8px; background: #151612; color: #eee9da; font-size: 0.74rem; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: 1; }
-    .observation-chip.empty { border-style: dashed; color: #8a8775; }
-    .observation-chip.active { outline: 3px solid #e8c766; outline-offset: 1px; }
+    .observation-row.card-input .roll-number { font-size: 0.9rem; font-weight: 800; }
+    .observation-card-body { display: grid; grid-template-columns: minmax(230px, 280px) minmax(0, 1fr); gap: 16px; align-items: start; min-width: 0; }
+    .observation-slot-column { display: grid; gap: 6px; }
+    .observation-slot-hint { margin: 0 0 2px; color: #a9a690; font-size: 0.7rem; }
+    .observation-chips { display: grid; gap: 6px; }
+    .observation-chip {
+      display: grid; grid-template-columns: 46px minmax(0, 1fr) auto; gap: 8px; align-items: center;
+      min-width: 0; padding: 6px 8px; border: 1px solid #44473d; border-radius: 8px;
+      background: #151612; color: #eee9da; font-size: 0.76rem; text-align: left; cursor: pointer;
+    }
+    .observation-chip:hover { border-color: #6b6a55; }
+    .observation-chip-slot { color: #d6d3c5; font-weight: 800; white-space: nowrap; }
+    .observation-chip-value { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .observation-chip-value.bonus-tag { opacity: 1; padding: 4px 8px; }
+    .observation-chip.empty .observation-chip-value { color: #77745f; }
+    .observation-chip.empty { border-style: dashed; }
+    .observation-chip.active { border: 2px solid #e8c766; background: rgb(214 179 92 / 14%); }
+    .observation-chip-marker { color: #ffe39a; font-size: 0.7rem; font-weight: 800; white-space: nowrap; }
+    @media (max-width: 760px) {
+      .observation-card-body { grid-template-columns: minmax(0, 1fr); }
+    }
     /* ボーナスのカード：シリーズスキル選択欄と同じ形（選択中は金枠＋チェック） */
     /* 系統ごとに列を分け、見出しの下に段階（II→III→EX）を縦に並べる */
     .observation-palette { display: grid; grid-template-columns: repeat(var(--category-count, 4), minmax(0, 1fr)); gap: 10px; align-items: start; }
@@ -383,10 +399,6 @@ document.head.append(Object.assign(document.createElement("style"), {
       border: solid #1a1708; border-width: 0 2px 2px 0; transform: rotate(45deg);
     }
     .observation-clear { justify-self: end; color: #ffffff; font-size: 0.72rem; }
-    @media (max-width: 640px) {
-      .observation-row.card-input { grid-template-columns: 1fr; }
-      .observation-chips { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-    }
     /* 手持ち武器（同じ構成で再復元）：青緑系で狙い（リセット）と区別する */
     .owned-weapon-settings { border-color: #4f9a92; background: rgb(79 154 146 / 6%); }
     .owned-weapon-form { display: grid; gap: 10px; margin-bottom: 14px; padding: 12px 14px; border: 1px dashed #4f9a92; border-radius: 10px; }
@@ -1745,16 +1757,28 @@ function enhanceObservationRowWithCards(row) {
   const render = () => {
     chips.replaceChildren(...selects.map((select, index) => {
       const chip = document.createElement("button");
+      const slotName = document.createElement("span");
+      const value = document.createElement("span");
       const bonusId = select.value === "" ? null : Number(select.value);
       chip.type = "button";
       chip.className = "observation-chip";
+      slotName.className = "observation-chip-slot";
+      slotName.textContent = `${index + 1}枠目`;
+      value.className = "observation-chip-value";
       if (bonusId === null) {
         chip.classList.add("empty");
-        chip.textContent = `${index + 1}枠目`;
+        value.textContent = "未選択";
       } else {
-        chip.classList.add("bonus-tag", bonusClassName(bonusId));
-        if (EX_BONUS_IDS.has(bonusId)) chip.classList.add("ex");
-        chip.textContent = gogmaBonusName(weaponType, bonusId);
+        value.classList.add("bonus-tag", bonusClassName(bonusId));
+        if (EX_BONUS_IDS.has(bonusId)) value.classList.add("ex");
+        value.textContent = gogmaBonusName(weaponType, bonusId);
+      }
+      chip.append(slotName, value);
+      if (index === active) {
+        const marker = document.createElement("span");
+        marker.className = "observation-chip-marker";
+        marker.textContent = "◀ 入力中";
+        chip.append(marker);
       }
       chip.classList.toggle("active", index === active);
       chip.title = `${index + 1}枠目（押すとこの枠を選び直せます）`;
@@ -1828,7 +1852,13 @@ function enhanceObservationRowWithCards(row) {
   });
   palette.style.setProperty("--category-count", String(categoryColumns.size));
 
-  body.append(chips, palette, clearButton);
+  const slotColumn = document.createElement("div");
+  slotColumn.className = "observation-slot-column";
+  const slotHint = document.createElement("p");
+  slotHint.className = "observation-slot-hint";
+  slotHint.textContent = "枠を押して選び、右のカードで入力";
+  slotColumn.append(slotHint, chips, clearButton);
+  body.append(slotColumn, palette);
   row.append(body);
   render();
 }
@@ -1836,7 +1866,9 @@ function enhanceObservationRowWithCards(row) {
 function renumberObservationRows() {
   const rows = [...observationRows.querySelectorAll(".observation-row")];
   rows.forEach((row, rollIndex) => {
-    row.querySelector(".roll-number").textContent = `抽選 ${rollIndex + 1}`;
+    row.querySelector(".roll-number").textContent = row.classList.contains("card-input")
+      ? `${rollIndex + 1}回目の再復元`
+      : `抽選 ${rollIndex + 1}`;
     row.querySelectorAll(".slot-label").forEach((label, slotIndex) => {
       label.textContent = `${slotIndex + 1}枠目`;
       label.parentElement.querySelector("select").setAttribute(
