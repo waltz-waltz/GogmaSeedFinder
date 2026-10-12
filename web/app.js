@@ -301,6 +301,12 @@ document.head.append(Object.assign(document.createElement("style"), {
     .bonus-wish-next-list strong { color: #e8c766; min-width: 9em; }
     .bonus-wish-next-list .bonus-wish-next-result { min-width: 4.5em; font-size: 0.9rem; }
     .bonus-wish-next-kind { font-size: 0.72rem; color: #e8c766; }
+    /* 回ごとの結果表：内部の縦スクロールをなくす（横に長いときの横スクロールだけ残す） */
+    #comparison-table-wrap { max-height: none; overflow-y: visible; overflow-x: auto; }
+    .comparison-more-bar { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin-top: 12px; }
+    .comparison-more-bar[hidden] { display: none; }
+    .comparison-more-status { color: #b9b6a4; font-size: 0.78rem; }
+    .comparison-more-bar .text-button { color: #ffffff; }
     /* 次の一致：見出し付きの表 */
     .bonus-wish-summary { overflow-x: auto; }
     .next-match-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
@@ -750,6 +756,10 @@ let ownedWeaponSection = null;
 // 復元ボーナス未来予測の画面設定（登録欄の切り替え・表の表示）。このブラウザに保存
 const BONUS_VIEW_KEY = "gogma-seed-finder-bonus-view-v1";
 let showAllComparisonColumns = null;
+// 回ごとの結果表は内部スクロールをやめ、10回分ずつ表示する（「続きを表示」で増やす）
+const COMPARISON_PAGE_SIZE = 10;
+let comparisonRowLimit = COMPARISON_PAGE_SIZE;
+let comparisonMoreBar = null;
 // 開け閉めできる欄は最初は閉じておき、開いた欄は書き直しても開いたままにする
 const openDetailKeys = new Set();
 // 武器種ごとの希望ボーナス { [weaponType]: { counts: [攻撃, 会心, 属性, 斬れ味・装填] } }
@@ -2972,6 +2982,7 @@ async function refreshComparisonPredictions() {
     ];
     if (requestId !== comparisonRequestId) return;
     comparisonRollSets = nextRollSets;
+    comparisonRowLimit = COMPARISON_PAGE_SIZE;
     renderComparisonTable();
   } catch (error) {
     if (requestId !== comparisonRequestId) return;
@@ -3008,6 +3019,7 @@ function renderComparisonTable() {
     comparisonTableWrap.hidden = true;
     exportBonusCsvButton.disabled = true;
     bonusExportStatus.textContent = "予測結果を表示するとCSVへ出力できます。";
+    if (comparisonMoreBar) comparisonMoreBar.hidden = true;
     updateComparisonStatus();
     renderBonusWishSummary();
     return;
@@ -3048,8 +3060,9 @@ function renderComparisonTable() {
 
   const { count, minimumExCount, visibleIndices } = comparisonPredictionVisibility();
   comparisonRows.replaceChildren(
-    ...visibleIndices.map((index) => createComparisonRow(index)),
+    ...visibleIndices.slice(0, comparisonRowLimit).map((index) => createComparisonRow(index)),
   );
+  renderComparisonMoreBar(visibleIndices.length);
   if (visibleIndices.length === 0) {
     const row = document.createElement("tr");
     const cell = document.createElement("td");
@@ -3109,6 +3122,43 @@ function exportVisibleBonusPredictionsCsv() {
     rows,
   );
   bonusExportStatus.textContent = `${rows.length.toLocaleString("ja-JP")}行・${headers.length.toLocaleString("ja-JP")}列をCSVへ出力しました。`;
+}
+
+// 表の下の「続きを10回分表示」「すべて表示」
+function renderComparisonMoreBar(total) {
+  if (!comparisonMoreBar) {
+    comparisonMoreBar = document.createElement("div");
+    comparisonMoreBar.className = "comparison-more-bar";
+    comparisonTableWrap.after(comparisonMoreBar);
+  }
+  const shown = Math.min(comparisonRowLimit, total);
+  const rest = total - shown;
+  const status = document.createElement("span");
+  status.className = "comparison-more-status";
+  status.textContent = `${total.toLocaleString("ja-JP")}行中 ${shown.toLocaleString("ja-JP")}行を表示中`;
+  if (rest <= 0) {
+    comparisonMoreBar.replaceChildren(status);
+    comparisonMoreBar.hidden = total === 0;
+    return;
+  }
+  const more = document.createElement("button");
+  more.type = "button";
+  more.className = "secondary small-button";
+  more.textContent = `続きを${Math.min(COMPARISON_PAGE_SIZE, rest)}回分表示（残り${rest.toLocaleString("ja-JP")}回）`;
+  more.addEventListener("click", () => {
+    comparisonRowLimit += COMPARISON_PAGE_SIZE;
+    renderComparisonTable();
+  });
+  const all = document.createElement("button");
+  all.type = "button";
+  all.className = "text-button";
+  all.textContent = "すべて表示";
+  all.addEventListener("click", () => {
+    comparisonRowLimit = Infinity;
+    renderComparisonTable();
+  });
+  comparisonMoreBar.replaceChildren(status, more, all);
+  comparisonMoreBar.hidden = false;
 }
 
 function createComparisonRow(index) {
