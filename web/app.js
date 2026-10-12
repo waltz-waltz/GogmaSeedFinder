@@ -242,25 +242,6 @@ document.head.append(Object.assign(document.createElement("style"), {
     .weapon-filter-settings { display: block; }
     .weapon-filter-settings .skill-filter-intro p { margin: 4px 0 12px; color: #a9a690; font-size: 0.8rem; }
     .weapon-filter-empty { color: #a9a690; font-size: 0.8rem; }
-    /* 大枠（当たり強調・条件一致だけ表示）：太い金色の枠。見出しと説明は枠内の上部に置く */
-    .skill-filter-settings:not(.weapon-filter-settings) {
-      align-items: start;
-      border: 3px solid #b8973f;
-      border-radius: 14px;
-      background: rgb(214 179 92 / 5%);
-    }
-    .skill-filter-settings:not(.weapon-filter-settings) > .skill-filter-intro {
-      grid-column: 1 / -1;
-      padding-bottom: 10px;
-      border-bottom: 1px solid rgb(214 179 92 / 30%);
-    }
-    .skill-filter-settings:not(.weapon-filter-settings) > .skill-filter-intro h3 { color: #e8c766; font-weight: 700; }
-    .skill-filter-settings:not(.weapon-filter-settings) > .skill-filter-intro p { font-size: 0.8rem; color: #a9a690; }
-    @media (min-width: 1401px) {
-      .skill-filter-settings:not(.weapon-filter-settings) {
-        grid-template-columns: minmax(170px, 0.7fr) minmax(190px, 0.7fr) minmax(360px, 1.8fr) minmax(220px, auto);
-      }
-    }
     /* 大枠（武器種ごとの条件）：太い金色の枠 */
     .skill-filter-settings.weapon-filter-settings {
       border: 3px solid #b8973f;
@@ -278,6 +259,59 @@ document.head.append(Object.assign(document.createElement("style"), {
     .weapon-filter-body { display: grid; gap: 12px; padding: 4px 14px 14px; }
     .weapon-filter-body > label { display: grid; gap: 4px; }
     .weapon-filter-body > label > select { max-width: 360px; }
+    /* 復元ボーナス未来予測：武器種ごとの希望ボーナス */
+    .bonus-wish-settings {
+      margin: 18px 0 0;
+      padding: 16px 18px;
+      border: 3px solid #b8973f;
+      border-radius: 14px;
+      background: rgb(214 179 92 / 5%);
+    }
+    .bonus-wish-settings .skill-filter-intro strong { font-family: Georgia, "Yu Mincho", serif; font-size: 1.02rem; font-weight: 500; }
+    .bonus-wish-settings .skill-filter-intro p { margin: 4px 0 10px; color: #a9a690; font-size: 0.78rem; line-height: 1.6; }
+    .bonus-wish-toggle { display: inline-flex; gap: 8px; align-items: center; margin-bottom: 12px; font-size: 0.8rem; font-weight: 700; }
+    .bonus-wish-categories { margin: 0; padding: 0; border: 0; }
+    .bonus-wish-categories legend { margin-bottom: 6px; color: #d6d3c5; font-size: 0.76rem; font-weight: 800; }
+    .bonus-wish-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; max-width: 560px; }
+    .bonus-wish-grid label, .bonus-wish-ex { display: grid; gap: 4px; font-size: 0.76rem; font-weight: 700; }
+    .bonus-wish-ex { max-width: 300px; }
+    .bonus-wish-grid select, .bonus-wish-ex select { height: 38px; }
+    .bonus-wish-total { margin: 6px 0 0; color: #a9a690; font-size: 0.76rem; }
+    .bonus-wish-total.over { color: #ff9f8f; font-weight: 700; }
+    .bonus-wish-summary {
+      margin-top: 18px;
+      padding: 14px 18px;
+      border: 2px solid #8fae6f;
+      border-radius: 12px;
+      background: rgb(110 150 90 / 10%);
+    }
+    .bonus-wish-summary h3 { margin: 0 0 8px; font-family: Georgia, "Yu Mincho", serif; font-size: 0.98rem; font-weight: 500; }
+    .bonus-wish-summary h3:not(:first-child) { margin-top: 14px; }
+    .bonus-wish-summary p { margin: 8px 0 0; color: #a9a690; font-size: 0.74rem; line-height: 1.6; }
+    .bonus-wish-next-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+    .bonus-wish-next-list li { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; font-size: 0.8rem; }
+    .bonus-wish-next-list strong { color: #e8c766; min-width: 9em; }
+    .bonus-wish-next-wish { color: #a9a690; font-size: 0.74rem; }
+    .bonus-wish-next-result { font-weight: 800; color: #cfeec0; }
+    .bonus-wish-next-list li.none .bonus-wish-next-result { color: #888; font-weight: 400; }
+    .bonus-wish-plan { margin: 0; padding-left: 1.6em; display: grid; gap: 4px; font-size: 0.8rem; line-height: 1.6; }
+    .comparison-table { --match-column-width: 150px; }
+    .bonus-match-cell { min-width: var(--match-column-width); vertical-align: top; }
+    .bonus-match-cell .comparison-bonus-set { grid-template-columns: repeat(5, auto); justify-content: start; }
+    td.bonus-wish-hit { background: rgb(232 199 102 / 10%); box-shadow: inset 0 0 0 2px #e8c766; }
+    @media (min-width: 900px) {
+      .comparison-table > thead > tr > th:nth-child(3),
+      .comparison-table > tbody > tr > td:nth-child(3) {
+        position: sticky;
+        left: calc(var(--offset-column-width) + var(--state-column-width));
+        z-index: 2;
+        background: #151612;
+        box-shadow: 8px 0 12px rgb(0 0 0 / 20%);
+      }
+      .comparison-table > thead > tr > th:nth-child(3) { z-index: 5; background: #20221c; }
+      .comparison-table > tbody > tr > td:nth-child(2) { box-shadow: none; }
+      .comparison-table > tbody > tr.bonus-wish-row-hit > td:nth-child(3) { background: #1d2418; }
+    }
   `,
 }));
 const STORAGE_KEY = "gogma-seed-finder-state-v1";
@@ -481,6 +515,13 @@ let skillPredictionRollSets = [];
 const WEAPON_SKILL_FILTERS_KEY = "gogma-seed-finder-weapon-filters-v1";
 let weaponSkillFilters = loadWeaponSkillFilters();
 let weaponFilterSection = null;
+// 武器種ごとの希望ボーナス { [weaponType]: { counts: [攻撃, 会心, 属性, 斬れ味・装填], minEx } }
+const BONUS_WISHES_KEY = "gogma-seed-finder-bonus-wishes-v1";
+const BONUS_WISH_MAX = [5, 5, 4, 2];
+let bonusWishes = loadBonusWishes();
+let bonusWishSection = null;
+let bonusWishSummary = null;
+let bonusWishMatchesOnly = null;
 let selectedSkillCounter = null;
 let skillObservedCount = 0;
 let currentSkillObservations = [];
@@ -2367,6 +2408,7 @@ function renderComparisonTargets() {
   renderKeepLayoutInputs();
   updateComparisonStatus();
   renderWeaponFilterSection();
+  renderBonusWishSection();
 }
 
 function readComparisonCount() {
@@ -2429,8 +2471,13 @@ function comparisonPredictionVisibility() {
   const rowMeetsExThreshold = (index) => comparisonRollSets.some((target) =>
     target.rolls[index].filter((bonusId) => EX_BONUS_IDS.has(bonusId)).length >= minimumExCount
   );
+  const rowMatchesWish = (index) => comparisonRollSets.some((target) =>
+    rollMatchesBonusWish(target, target.rolls[index])
+  );
+  const wishOnly = !!bonusWishMatchesOnly?.checked;
   const visibleIndices = Array.from({ length: count }, (_, index) => index)
-    .filter((index) => !bonusExFilterEnabled.checked || rowMeetsExThreshold(index));
+    .filter((index) => !bonusExFilterEnabled.checked || rowMeetsExThreshold(index))
+    .filter((index) => !wishOnly || rowMatchesWish(index));
   return { count, minimumExCount, visibleIndices };
 }
 
@@ -2442,6 +2489,7 @@ function renderComparisonTable() {
     exportBonusCsvButton.disabled = true;
     bonusExportStatus.textContent = "予測結果を表示するとCSVへ出力できます。";
     updateComparisonStatus();
+    renderBonusWishSummary();
     return;
   }
 
@@ -2451,9 +2499,13 @@ function renderComparisonTable() {
   offsetHeader.textContent = "何回先";
   continuationHeader.scope = "col";
   continuationHeader.textContent = "保存後の状態";
+  const matchHeader = document.createElement("th");
+  matchHeader.scope = "col";
+  matchHeader.textContent = "一致";
   comparisonHeaderRow.replaceChildren(
     offsetHeader,
     continuationHeader,
+    matchHeader,
     ...comparisonRollSets.map((target) => {
       const header = document.createElement("th");
       header.scope = "col";
@@ -2469,9 +2521,11 @@ function renderComparisonTable() {
   if (visibleIndices.length === 0) {
     const row = document.createElement("tr");
     const cell = document.createElement("td");
-    cell.colSpan = 2 + comparisonRollSets.length;
+    cell.colSpan = 3 + comparisonRollSets.length;
     cell.className = "prediction-empty";
-    cell.textContent = `EXが${minimumExCount}個以上の結果は表示範囲内にありません。表示回数を増やすか最低EX数を下げてください。`;
+    cell.textContent = bonusWishMatchesOnly?.checked
+      ? "条件に合う結果は表示範囲内にありません。表示回数を増やすか、条件を変更してください。"
+      : `EXが${minimumExCount}個以上の結果は表示範囲内にありません。表示回数を増やすか最低EX数を下げてください。`;
     row.append(cell);
     comparisonRows.replaceChildren(row);
   }
@@ -2487,6 +2541,7 @@ function renderComparisonTable() {
     : "";
   comparisonStatus.textContent = `${prefix}${comparisonRollSets.length.toLocaleString("ja-JP")}${unit} × ${count.toLocaleString("ja-JP")}回${filterStatus}`;
   comparisonStatus.className = "status-pill complete";
+  renderBonusWishSummary();
 }
 
 function exportVisibleBonusPredictionsCsv() {
@@ -2500,6 +2555,7 @@ function exportVisibleBonusPredictionsCsv() {
   const headers = [
     t("何回先"),
     t("カウンター位置"),
+    "一致",
     ...comparisonRollSets.flatMap((target) => Array.from({ length: 5 }, (_, index) =>
       `${predictionCsvTargetName(target)} ${t(`${index + 1}枠目`)}`
     )),
@@ -2507,6 +2563,10 @@ function exportVisibleBonusPredictionsCsv() {
   const rows = visibleIndices.map((index) => [
     index + 1,
     saveState.bonusCounter + index + 1,
+    comparisonRollSets
+      .filter((target) => rollMatchesBonusWish(target, target.rolls[index]))
+      .map((target) => comparisonTargetName(target))
+      .join(" / "),
     ...comparisonRollSets.flatMap((target) => target.rolls[index].map((bonusId) =>
       t(gogmaBonusName(target.weaponType, bonusId))
     )),
@@ -2528,15 +2588,23 @@ function createComparisonRow(index) {
   if (bonusExFilterEnabled.checked) row.classList.add("prediction-match");
   row.append(offsetCell, createSavedStateCell("bonus", index + 1, null, true));
 
+  // 希望ボーナスに一致した武器を左側の「一致」列にまとめる
+  const matchCell = document.createElement("td");
+  matchCell.className = "bonus-match-cell";
+  row.append(matchCell);
+
   for (const target of comparisonRollSets) {
     const cell = document.createElement("td");
-    const bonusSet = document.createElement("div");
-    bonusSet.className = "comparison-bonus-set";
-    for (const bonusId of target.rolls[index]) {
-      const tag = document.createElement("span");
-      tag.className = `bonus-tag compact ${bonusClassName(bonusId)}${EX_BONUS_IDS.has(bonusId) ? " ex" : ""}`;
-      tag.textContent = compactGogmaBonusName(target.weaponType, bonusId);
-      bonusSet.append(tag);
+    const bonusSet = createCompactBonusSet(target, target.rolls[index]);
+    if (rollMatchesBonusWish(target, target.rolls[index])) {
+      cell.classList.add("bonus-wish-hit");
+      const item = document.createElement("div");
+      const name = document.createElement("div");
+      item.className = "skill-match-item";
+      name.className = "skill-match-name";
+      name.textContent = comparisonTargetName(target);
+      item.append(name, createCompactBonusSet(target, target.rolls[index]));
+      matchCell.append(item);
     }
     if (bonusPrediction.mode === "reset") {
       const keepButton = document.createElement("button");
@@ -2550,11 +2618,307 @@ function createComparisonRow(index) {
       ));
       bonusSet.append(keepButton);
     }
-    cell.className = "comparison-result-cell";
+    cell.classList.add("comparison-result-cell");
     cell.append(bonusSet);
     row.append(cell);
   }
+
+  if (matchCell.childElementCount === 0) {
+    const none = document.createElement("span");
+    none.className = "skill-match-none";
+    none.textContent = "—";
+    matchCell.append(none);
+  } else {
+    row.classList.add("prediction-match", "bonus-wish-row-hit");
+  }
   return row;
+}
+
+function createCompactBonusSet(target, bonusIds) {
+  const bonusSet = document.createElement("div");
+  bonusSet.className = "comparison-bonus-set";
+  for (const bonusId of bonusIds) {
+    const tag = document.createElement("span");
+    tag.className = `bonus-tag compact ${bonusClassName(bonusId)}${EX_BONUS_IDS.has(bonusId) ? " ex" : ""}`;
+    tag.textContent = compactGogmaBonusName(target.weaponType, bonusId);
+    bonusSet.append(tag);
+  }
+  return bonusSet;
+}
+
+function loadBonusWishes() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(BONUS_WISHES_KEY) ?? "{}");
+    return saved && typeof saved === "object" ? saved : {};
+  } catch {
+    return {};
+  }
+}
+
+function persistBonusWishes() {
+  try {
+    localStorage.setItem(BONUS_WISHES_KEY, JSON.stringify(bonusWishes));
+  } catch {
+    // The app remains usable when storage is unavailable.
+  }
+}
+
+function bonusWishFor(weaponType) {
+  const entry = bonusWishes[weaponType];
+  return {
+    counts: BONUS_WISH_MAX.map((max, category) =>
+      Math.max(0, Math.min(max, Math.trunc(Number(entry?.counts?.[category]) || 0)))),
+    minEx: Math.max(0, Math.min(5, Math.trunc(Number(entry?.minEx) || 0))),
+  };
+}
+
+function bonusWishTotal(wish) {
+  return wish.counts.reduce((sum, count) => sum + count, 0);
+}
+
+function hasBonusWish(weaponType, mode = bonusPrediction.mode) {
+  const wish = bonusWishFor(weaponType);
+  return mode === "keep" ? wish.minEx > 0 : bonusWishTotal(wish) > 0;
+}
+
+function bonusWishText(weaponType, mode) {
+  const wish = bonusWishFor(weaponType);
+  if (mode === "keep") return wish.minEx > 0 ? `EX ${wish.minEx}個以上` : "指定なし";
+  const parts = keepCategoriesForWeapon(weaponType, 1)
+    .filter(([category]) => wish.counts[category] > 0)
+    .map(([category, name]) => `${name}×${wish.counts[category]}`);
+  return parts.length > 0 ? parts.join("＋") : "指定なし";
+}
+
+// リセット：系統の数（順不同・II/III/EXは区別しない）を満たすか。EX厳選：EXの数が最低数以上か
+function rollMatchesBonusWish(target, bonusIds) {
+  const wish = bonusWishFor(target.weaponType);
+  if (bonusPrediction.mode === "keep") {
+    return wish.minEx > 0
+      && bonusIds.filter((bonusId) => EX_BONUS_IDS.has(bonusId)).length >= wish.minEx;
+  }
+  const total = bonusWishTotal(wish);
+  if (total === 0 || total > 5) return false;
+  const counts = [0, 0, 0, 0];
+  for (const bonusId of bonusIds) counts[bonusCategoryId(bonusId)] += 1;
+  return wish.counts.every((need, category) => counts[category] >= need);
+}
+
+function renderBonusWishSection() {
+  if (!bonusWishSection) {
+    bonusWishSection = document.createElement("section");
+    bonusWishSection.className = "bonus-wish-settings";
+    document.querySelector(".bonus-ex-filter-settings")?.after(bonusWishSection);
+    bonusWishSummary = document.createElement("div");
+    bonusWishSummary.className = "bonus-wish-summary";
+    bonusWishSummary.hidden = true;
+    comparisonTableWrap.before(bonusWishSummary);
+    bonusWishMatchesOnly = document.createElement("input");
+    bonusWishMatchesOnly.type = "checkbox";
+    bonusWishMatchesOnly.addEventListener("change", () => renderComparisonTable());
+  }
+
+  const weaponTypes = [...new Set(comparisonTargets.map((target) => target.weaponType))]
+    .sort((a, b) => a - b);
+
+  const intro = document.createElement("div");
+  intro.className = "skill-filter-intro";
+  const title = document.createElement("strong");
+  title.textContent = "武器種ごとの希望ボーナス";
+  const description = document.createElement("p");
+  description.textContent = "武器種ごとに欲しいボーナスを決めておくと、表の「一致」列に当たりが出ます。「リセットして再復元」では系統の数（順不同・II／III／EXは区別しない）、「同じ構成で再復元」ではEXの数で判定します。設定はこのブラウザに保存されます。";
+  const toggle = document.createElement("label");
+  toggle.className = "checkbox-label bonus-wish-toggle";
+  const toggleText = document.createElement("span");
+  toggleText.textContent = "一致した行だけ表示";
+  toggle.append(bonusWishMatchesOnly, toggleText);
+  intro.append(title, description, toggle);
+
+  if (weaponTypes.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "weapon-filter-empty";
+    empty.textContent = "武器を登録すると、ここに武器種ごとの設定欄が出ます。";
+    bonusWishSection.replaceChildren(intro, empty);
+    return;
+  }
+
+  const rows = weaponTypes.map((weaponType) => {
+    const row = document.createElement("details");
+    row.className = "weapon-filter-row";
+    row.open = hasBonusWish(weaponType, "reset") || hasBonusWish(weaponType, "keep");
+
+    const summary = document.createElement("summary");
+    const name = document.createElement("span");
+    name.className = "weapon-filter-name";
+    name.textContent = t(optionName(WEAPON_TYPES, weaponType));
+    const state = document.createElement("span");
+    state.className = "weapon-filter-state";
+    const updateState = () => {
+      state.textContent = `リセット：${bonusWishText(weaponType, "reset")}　／　EX厳選：${bonusWishText(weaponType, "keep")}`;
+    };
+    updateState();
+    summary.append(name, state);
+
+    const wish = bonusWishFor(weaponType);
+    const categoryFieldset = document.createElement("fieldset");
+    categoryFieldset.className = "bonus-wish-categories";
+    const legend = document.createElement("legend");
+    legend.textContent = "リセットして再復元で狙う系統の数（5枠中）";
+    const categoryGrid = document.createElement("div");
+    categoryGrid.className = "bonus-wish-grid";
+    const categorySelects = new Map();
+    for (const [category, categoryName] of keepCategoriesForWeapon(weaponType, 1)) {
+      const label = document.createElement("label");
+      const text = document.createElement("span");
+      const select = document.createElement("select");
+      text.textContent = categoryName;
+      populateSelect(
+        select,
+        Array.from({ length: BONUS_WISH_MAX[category] + 1 }, (_, count) => [count, count === 0 ? "—" : `${count}枠`]),
+        wish.counts[category],
+      );
+      label.append(text, select);
+      categoryGrid.append(label);
+      categorySelects.set(category, select);
+    }
+    const total = document.createElement("p");
+    total.className = "bonus-wish-total";
+    categoryFieldset.append(legend, categoryGrid, total);
+
+    const exLabel = document.createElement("label");
+    exLabel.className = "bonus-wish-ex";
+    const exText = document.createElement("span");
+    exText.textContent = "同じ構成で再復元（EX厳選）のとき";
+    const exSelect = document.createElement("select");
+    populateSelect(
+      exSelect,
+      [[0, "指定しない"], ...[1, 2, 3, 4].map((count) => [count, `EX ${count}個以上`]), [5, "EX 5個"]],
+      wish.minEx,
+    );
+    exLabel.append(exText, exSelect);
+
+    const note = document.createElement("p");
+    note.className = "weapon-filter-empty";
+    note.textContent = weaponType === BOW_WEAPON_TYPE
+      ? "弓は斬れ味・装填系が出ません。無属性の弓は属性も出ません。"
+      : BOWGUN_WEAPON_TYPES.has(weaponType)
+        ? "ボウガンは属性が出ません。装填系は2枠までです。"
+        : "斬れ味は2枠まで、属性は4枠までです。無属性の武器は属性が出ません。";
+
+    const updateTotal = () => {
+      const sum = bonusWishTotal(bonusWishFor(weaponType));
+      total.textContent = sum > 5 ? `合計 ${sum}枠：5枠を超えているので一致しません` : `合計 ${sum} / 5枠`;
+      total.classList.toggle("over", sum > 5);
+    };
+    updateTotal();
+
+    const clearButton = document.createElement("button");
+    clearButton.type = "button";
+    clearButton.className = "text-button";
+    clearButton.textContent = "この武器種の希望をクリア";
+
+    const save = () => {
+      const counts = [0, 0, 0, 0];
+      categorySelects.forEach((select, category) => { counts[category] = Number(select.value); });
+      const minEx = Number(exSelect.value);
+      if (counts.some((count) => count > 0) || minEx > 0) bonusWishes[weaponType] = { counts, minEx };
+      else delete bonusWishes[weaponType];
+      persistBonusWishes();
+      updateState();
+      updateTotal();
+      renderComparisonTable();
+    };
+    categoryGrid.addEventListener("change", save);
+    exSelect.addEventListener("change", save);
+    clearButton.addEventListener("click", () => {
+      categorySelects.forEach((select) => { select.value = "0"; });
+      exSelect.value = "0";
+      save();
+    });
+
+    const body = document.createElement("div");
+    body.className = "weapon-filter-body";
+    body.append(categoryFieldset, exLabel, note, clearButton);
+    row.append(summary, body);
+    return row;
+  });
+
+  bonusWishSection.replaceChildren(intro, ...rows);
+}
+
+// 武器ごとの「次の一致」と、カウンターの小さい順に並べた採用の順番
+function renderBonusWishSummary() {
+  if (!bonusWishSummary) return;
+  const mode = bonusPrediction.mode;
+  const wishedTargets = comparisonRollSets.filter((target) => hasBonusWish(target.weaponType, mode));
+  if (!selectedCandidate || wishedTargets.length === 0) {
+    bonusWishSummary.hidden = true;
+    bonusWishSummary.replaceChildren();
+    return;
+  }
+
+  const count = comparisonRollSets[0].rolls.length;
+  const results = wishedTargets.map((target) => {
+    const hits = [];
+    target.rolls.forEach((roll, index) => {
+      if (rollMatchesBonusWish(target, roll)) hits.push(index);
+    });
+    return { target, hits };
+  });
+
+  const title = document.createElement("h3");
+  title.textContent = `次の一致（表示中の${count.toLocaleString("ja-JP")}回の中）`;
+
+  const list = document.createElement("ul");
+  list.className = "bonus-wish-next-list";
+  for (const { target, hits } of results) {
+    const item = document.createElement("li");
+    const name = document.createElement("strong");
+    name.textContent = comparisonTargetName(target);
+    const wishText = document.createElement("span");
+    wishText.className = "bonus-wish-next-wish";
+    wishText.textContent = bonusWishText(target.weaponType, mode);
+    const result = document.createElement("span");
+    result.className = "bonus-wish-next-result";
+    result.textContent = hits.length === 0
+      ? "表示範囲内になし（表示する回数を増やしてください）"
+      : `${hits[0] + 1}回先${hits.length > 1 ? `（ほか${hits.length - 1}回）` : ""}`;
+    if (hits.length === 0) item.classList.add("none");
+    item.append(name, wishText, result);
+    list.append(item);
+  }
+
+  const plan = results
+    .filter(({ hits }) => hits.length > 0)
+    .map(({ target, hits }) => ({ target, index: hits[0] }))
+    .sort((a, b) => a.index - b.index);
+
+  const children = [title, list];
+  if (plan.length > 0) {
+    const planTitle = document.createElement("h3");
+    planTitle.textContent = "採用の順番（例）";
+    const planList = document.createElement("ol");
+    planList.className = "bonus-wish-plan";
+    let previous = 0;
+    for (const { target, index } of plan) {
+      const step = document.createElement("li");
+      const advance = index + 1 - previous;
+      const name = comparisonTargetName(target);
+      step.textContent = advance <= 0
+        ? `${index + 1}回先：${name}（同じ回で別の武器と重なっています。どちらか1つを選んでください）`
+        : advance === 1
+          ? `${index + 1}回先：次の1回を${name}で再復元して採用・セーブ`
+          : `${index + 1}回先：${advance - 1}回は別の武器で再復元して進める → ${advance}回目を${name}で再復元して採用・セーブ`;
+      planList.append(step);
+      previous = Math.max(previous, index + 1);
+    }
+    const planNote = document.createElement("p");
+    planNote.textContent = "復元ボーナスカウンターは全武器で共通なので、当たりまでの途中の再復元はどの武器で行っても同じように1つずつ進みます。ただし、再復元した武器のボーナスは変わるので、採用済みの武器では進めないでください。採用したら、その行の「ここを0にする」で続きを予測できます。";
+    children.push(planTitle, planList, planNote);
+  }
+
+  bonusWishSummary.replaceChildren(...children);
+  bonusWishSummary.hidden = false;
 }
 
 function updateComparisonStatus() {
@@ -2838,8 +3202,7 @@ function renderWeaponFilterSection() {
       groupSelect,
       [[-1, "指定しない"], ...prioritizedSkillOptions(GROUP_SKILLS, PRIORITY_GROUP_SKILL_INDICES)
         .map(([index, label]) => [index, skillLabelWithEffect(label)])],
-      // まだ何も指定していない武器種は、グループスキルの初期値をヌシの魂にしておく
-      hasWeaponSkillFilter(weaponType) ? entry.groupIndex : LORDS_SOUL_GROUP_INDEX,
+      entry.groupIndex,
     );
     groupLabel.append(groupSelect);
     attachGroupEffectNote(groupSelect);
@@ -2890,14 +3253,9 @@ function renderWeaponFilterSection() {
     groupSelect.addEventListener("change", save);
     seriesOptions.addEventListener("change", save);
     clearButton.addEventListener("click", () => {
-      // クリア後も初期値（ヌシの魂）に戻し、この武器種は共通の条件で判定する
-      groupSelect.value = String(LORDS_SOUL_GROUP_INDEX);
-      groupSelect.dispatchEvent(new Event("change", { bubbles: false }));
+      groupSelect.value = "-1";
       seriesOptions.querySelectorAll("input").forEach((c) => (c.checked = false));
-      delete weaponSkillFilters[weaponType];
-      persistWeaponSkillFilters();
-      state.textContent = "共通の条件を使用";
-      renderSkillPredictionTable();
+      groupSelect.dispatchEvent(new Event("change"));
     });
 
     const body = document.createElement("div");
