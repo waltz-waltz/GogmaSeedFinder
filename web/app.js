@@ -320,6 +320,19 @@ document.head.append(Object.assign(document.createElement("style"), {
       box-shadow: 0 0 14px rgb(255 212 77 / 70%); filter: brightness(1.25) saturate(1.3);
     }
     .bonus-tag.not-wish { opacity: 0.25; filter: grayscale(1); }
+    /* 開け閉めできる欄：「▶ クリックで〜が開きます」の案内 */
+    details.collapsible > summary { cursor: pointer; list-style: none; }
+    details.collapsible > summary::-webkit-details-marker { display: none; }
+    .collapsible-hint { color: #9fd18a; font-size: 0.74rem; font-weight: 700; white-space: nowrap; }
+    details.collapsible:not([open]) .when-open, details.collapsible[open] > summary .when-closed { display: none; }
+    details.collapsible[open] > summary .when-open { display: inline; }
+    details.collapsible > summary:hover .collapsible-hint { color: #c6f0b4; text-decoration: underline; }
+    /* 包んだ欄（登録済みリスト・1つの武器を調べる欄）の見出し */
+    details.collapsible:not(.weapon-filter-row) { margin-top: 12px; border: 1px dashed #6b6a55; border-radius: 10px; }
+    details.collapsible:not(.weapon-filter-row) > summary { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline; padding: 10px 14px; }
+    details.collapsible:not(.weapon-filter-row)[open] > summary { border-bottom: 1px dashed #6b6a55; }
+    details.collapsible:not(.weapon-filter-row) > :not(summary) { margin: 12px 14px 14px; }
+    .collapsible-title { color: #f2eddc; font-weight: 800; font-size: 0.86rem; }
     /* 登録欄の切り替え */
     .registration-switch { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 4px 0 16px; }
     .registration-switch-label { color: #a9a690; font-size: 0.78rem; font-weight: 700; margin-right: 4px; }
@@ -684,6 +697,8 @@ let ownedWeaponSection = null;
 // 復元ボーナス未来予測の画面設定（登録欄の切り替え・表の表示）。このブラウザに保存
 const BONUS_VIEW_KEY = "gogma-seed-finder-bonus-view-v1";
 let showAllComparisonColumns = null;
+// 開け閉めできる欄は最初は閉じておき、開いた欄は書き直しても開いたままにする
+const openDetailKeys = new Set();
 // 武器種ごとの希望ボーナス { [weaponType]: { counts: [攻撃, 会心, 属性, 斬れ味・装填] } }
 const BONUS_WISHES_KEY = "gogma-seed-finder-bonus-wishes-v1";
 const BONUS_WISH_MAX = [5, 5, 4, 2];
@@ -2811,6 +2826,7 @@ function renderComparisonTargets() {
   updateComparisonStatus();
   renderWeaponFilterSection();
   renderBonusWishSection();
+  updateRegisteredListTitles();
 }
 
 function readComparisonCount() {
@@ -3173,6 +3189,40 @@ function rollMatchesBonusWish(target, bonusIds) {
   return wish.counts.every((need, category) => counts[category] >= need);
 }
 
+// 開け閉めする欄の共通処理：初期は閉じる・開閉を覚える・「クリックで開きます」の案内を付ける
+function setupCollapsible(details, summary, key, openText = "クリックで設定欄が開きます") {
+  details.classList.add("collapsible");
+  details.open = openDetailKeys.has(key);
+  details.addEventListener("toggle", () => {
+    if (details.open) openDetailKeys.add(key);
+    else openDetailKeys.delete(key);
+  });
+  const hint = document.createElement("span");
+  hint.className = "collapsible-hint";
+  const closed = document.createElement("span");
+  const opened = document.createElement("span");
+  closed.className = "when-closed";
+  opened.className = "when-open";
+  closed.textContent = `▶ ${openText}`;
+  opened.textContent = "▼ クリックで閉じます";
+  hint.append(closed, opened);
+  summary.append(hint);
+}
+
+// 既にある要素を、開け閉めできる欄で包む
+function wrapInCollapsible(element, key, titleText, openText) {
+  const details = document.createElement("details");
+  const summary = document.createElement("summary");
+  const title = document.createElement("span");
+  title.className = "collapsible-title";
+  title.textContent = titleText;
+  summary.append(title);
+  element.before(details);
+  details.append(summary, element);
+  setupCollapsible(details, summary, key, openText);
+  return { details, title };
+}
+
 function loadBonusView() {
   const saved = loadJsonObject(BONUS_VIEW_KEY);
   return {
@@ -3253,15 +3303,31 @@ function setupComparisonFrames() {
   const firstStepAnchor = section.querySelector(".prediction-intro") ?? section.querySelector(".comparison-heading");
   firstStepAnchor.after(step1, step2, step3);
 
-  // 大枠B：「1条件を詳しく絞り込む」は別の調べ方
+  // 登録済みの武器のリストは長くなるので、最初は閉じておく（件数だけ見せる）
+  wrapInCollapsible(comparisonTargetList, "registered-list", "登録済みの狙い", "クリックで一覧が開きます");
+  wrapInCollapsible(skillTargetList, "skill-registered-list", "登録済みの武器", "クリックで一覧が開きます");
+  updateRegisteredListTitles();
+
+  // 大枠B：「1条件を詳しく絞り込む」は別の調べ方。普段は閉じておく
   if (detailPredictionSection) {
     detailPredictionSection.classList.add("big-frame", "big-frame-detail");
     const note = document.createElement("p");
     note.className = "big-frame-note";
-    note.textContent = "ここは上とは別の調べ方です。登録しなくても、1つの武器種・属性だけを選んで、II・III・EXまで細かく指定して探せます。";
-    const detailHeading = detailPredictionSection.querySelector(".section-heading, h2, h3");
-    (detailHeading ?? detailPredictionSection.firstElementChild)?.after(note);
+    note.textContent = "ここは上とは別の調べ方です。登録しなくても、1つの武器種・属性だけを選んで、II・III・EXまで細かく指定して探せます（seed検索の直後に、入力した結果と予測が合っているかの確認にも使えます）。";
+    const detailHeading = detailPredictionSection.querySelector(".section-heading") ?? detailPredictionSection.firstElementChild;
+    const body = document.createElement("div");
+    body.className = "detail-collapsible-body";
+    body.append(...[...detailPredictionSection.children].filter((child) => child !== detailHeading));
+    detailPredictionSection.append(note, body);
+    wrapInCollapsible(body, "detail-section", "1つの武器を細かい条件で調べる", "クリックで開きます");
   }
+}
+
+function updateRegisteredListTitles() {
+  const resetTitle = comparisonTargetList.closest("details")?.querySelector(".collapsible-title");
+  if (resetTitle) resetTitle.textContent = `登録済みの狙い（${comparisonTargets.length}件）`;
+  const skillTitle = skillTargetList.closest("details")?.querySelector(".collapsible-title");
+  if (skillTitle) skillTitle.textContent = `登録済みの武器（${uniqueTargetsByCombination().length}件）`;
 }
 
 // 登録欄の切り替え：「狙い（リセット）」と「手持ち武器（同じ構成）」のどちらか一方だけを出す
@@ -3270,7 +3336,7 @@ function setupRegistrationSwitch() {
   const resetParts = [
     document.querySelector(".comparison-settings"),
     document.querySelector(".comparison-actions"),
-    comparisonTargetList,
+    comparisonTargetList.closest("details") ?? comparisonTargetList,
     bonusWishSection.closest(".step-frame") ?? bonusWishSection,
   ].filter(Boolean);
   const intro = document.querySelector(".comparison-section .prediction-intro");
@@ -3393,7 +3459,6 @@ function renderBonusWishSection() {
   const rows = weaponTypes.map((weaponType) => {
     const row = document.createElement("details");
     row.className = "weapon-filter-row";
-    row.open = bonusWishTotal(bonusWishFor(weaponType)) > 0;
 
     const summary = document.createElement("summary");
     const name = document.createElement("span");
@@ -3406,6 +3471,7 @@ function renderBonusWishSection() {
     };
     updateState();
     summary.append(name, state);
+    setupCollapsible(row, summary, `bonus-wish:${weaponType}`);
 
     const wish = bonusWishFor(weaponType);
     const categoryFieldset = document.createElement("fieldset");
@@ -3871,8 +3937,6 @@ function renderOwnedWeaponSection() {
   const cards = ownedWeapons.map((weapon) => {
     const card = document.createElement("details");
     card.className = "weapon-filter-row owned-weapon-card";
-    const problem = ownedWeaponProblem(weapon);
-    card.open = problem !== null;
     const summary = document.createElement("summary");
     const name = document.createElement("span");
     name.className = "weapon-filter-name";
@@ -3898,7 +3962,9 @@ function renderOwnedWeaponSection() {
       renderOwnedWeaponSection();
       void refreshComparisonPredictions();
     });
-    summary.append(name, state, removeButton);
+    summary.append(name, state);
+    setupCollapsible(card, summary, `owned:${weapon.id}`, "クリックで今のボーナスと条件の設定欄が開きます");
+    summary.append(removeButton);
 
     const body = document.createElement("div");
     body.className = "weapon-filter-body";
@@ -4200,7 +4266,6 @@ function renderWeaponFilterSection() {
     const entry = weaponSkillFilters[weaponType] ?? { groupIndex: -1, seriesIndices: [] };
     const row = document.createElement("details");
     row.className = "weapon-filter-row";
-    row.open = hasWeaponSkillFilter(weaponType);
 
     const summary = document.createElement("summary");
     const name = document.createElement("span");
@@ -4215,6 +4280,7 @@ function renderWeaponFilterSection() {
         ].filter(Boolean).join(" ＋ ")
       : "共通の条件を使用";
     summary.append(name, state);
+    setupCollapsible(row, summary, `skill-filter:${weaponType}`);
 
     const groupLabel = document.createElement("label");
     groupLabel.textContent = "グループスキル";
