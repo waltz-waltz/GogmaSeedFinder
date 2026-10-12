@@ -301,6 +301,27 @@ document.head.append(Object.assign(document.createElement("style"), {
     .bonus-wish-next-list strong { color: #e8c766; min-width: 9em; }
     .bonus-wish-next-list .bonus-wish-next-result { min-width: 4.5em; font-size: 0.9rem; }
     .bonus-wish-next-kind { font-size: 0.72rem; color: #e8c766; }
+    /* 次の一致：見出し付きの表 */
+    .bonus-wish-summary { overflow-x: auto; }
+    .next-match-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+    .next-match-table th { padding: 6px 8px; border-bottom: 2px solid #5a6b4c; color: #b9b6a4; font-size: 0.72rem; font-weight: 800; text-align: left; white-space: nowrap; }
+    .next-match-table td { padding: 6px 8px; border-bottom: 1px solid rgb(255 255 255 / 7%); vertical-align: middle; }
+    .next-match-table .next-when { color: #cfeec0; font-size: 0.92rem; font-weight: 900; white-space: nowrap; }
+    .next-match-table .next-weapon { color: #f2eddc; font-weight: 800; white-space: nowrap; }
+    .next-match-table .next-label { color: #e8c766; font-weight: 800; }
+    .next-match-table .next-note { color: #b9b6a4; font-size: 0.74rem; }
+    .next-match-table .next-result .comparison-bonus-set { grid-template-columns: repeat(5, auto); justify-content: start; }
+    .next-match-table tr.none td { opacity: 0.55; }
+    .method-pair { white-space: nowrap; font-size: 0.78rem; color: #4a4a40; }
+    .method-on { font-weight: 900; padding: 1px 6px; border-radius: 5px; }
+    .method-on.reset { color: #1a1708; background: #e8c766; }
+    .method-on.owned { color: #0d1f1d; background: #8fe0d6; }
+    .method-off { color: #5f5e52; opacity: 0.6; }
+    /* 武器種・属性の札（その横に登録名） */
+    .weapon-badge {
+      display: inline-block; margin-right: 6px; padding: 1px 8px; border: 1px solid #8a8670; border-radius: 6px;
+      background: #2b2c25; color: #f2eddc; font-size: 0.74rem; font-weight: 800; vertical-align: 1px;
+    }
     .bonus-wish-next-kind.owned { color: #8fe0d6; }
     .bonus-wish-next-list .comparison-bonus-set { grid-template-columns: repeat(5, auto); justify-content: start; }
     /* 大枠：A「登録した武器をまとめて予測」（金）、B「1つの武器だけを詳しく調べる」（青灰） */
@@ -2825,6 +2846,27 @@ function comparisonTargetName(target) {
   return localizedTargetName(weapon, attributeName);
 }
 
+// 「片手剣・毒」のように武器種と属性を並べた文字
+function weaponAndAttributeText(target) {
+  const weapon = t(optionName(WEAPON_TYPES, target.weaponType));
+  const attribute = t(optionName(ATTRIBUTES, target.attributeForce)).replace("属性", "");
+  return `${weapon}・${attribute}`;
+}
+
+// 表示用の名前：［片手剣・毒］の札 ＋ 登録名（登録名があるときだけ）
+function createWeaponBadge(target) {
+  const badge = document.createElement("span");
+  badge.className = "weapon-badge";
+  badge.textContent = weaponAndAttributeText(target);
+  return target.label ? [badge, target.label] : [badge];
+}
+
+// 文章用：「片手剣・毒「【攻撃激化】毒」」
+function targetNameWithWeapon(target) {
+  const base = weaponAndAttributeText(target);
+  return target.label ? `${base}「${target.label}」` : base;
+}
+
 function predictionCsvTargetName(target) {
   const weapon = optionName(WEAPON_TYPES, target.weaponType);
   const attribute = optionName(ATTRIBUTES, target.attributeForce);
@@ -2993,7 +3035,7 @@ function renderComparisonTable() {
       header.className = target.kind === "owned" ? "owned-column-header" : "reset-column-header";
       kind.className = "column-kind";
       kind.textContent = target.kind === "owned" ? "手持ち・同じ構成" : "狙い・リセット";
-      header.append(kind, document.createTextNode(comparisonTargetName(target)));
+      header.append(kind, ...createWeaponBadge(target));
       if (target.kind === "owned") {
         const layout = document.createElement("span");
         layout.className = "column-layout";
@@ -3093,7 +3135,7 @@ function createComparisonRow(index) {
       const name = document.createElement("div");
       item.className = "skill-match-item";
       name.className = "skill-match-name";
-      name.textContent = `${comparisonTargetName(target)}（${target.kind === "owned" ? "同じ構成" : "リセット"}）`;
+      name.append(...createWeaponBadge(target), `（${target.kind === "owned" ? "同構成" : "リセット"}）`);
       // 「一致」列だけで操作できるよう、採用ボタンもここに付ける
       const matchButton = target.kind === "owned"
         ? createAdoptOwnedUpdateButton(target, target.rolls[index], index + 1)
@@ -3603,41 +3645,61 @@ function renderBonusWishSummary() {
   const title = document.createElement("h3");
   title.textContent = `次の一致（表示中の${count.toLocaleString("ja-JP")}回の中）`;
 
-  const list = document.createElement("ul");
-  list.className = "bonus-wish-next-list";
-  // 例：「あと1回（リセット）雷太刀  攻EX 攻II 会II 攻II 攻III  同じ回にほか2武器も一致」
-  for (const { target, hits } of results) {
-    const item = document.createElement("li");
-    item.title = `条件：${targetWishText(target)}`;
-    const when = document.createElement("span");
-    when.className = "bonus-wish-next-result";
-    const kind = document.createElement("span");
-    kind.className = `bonus-wish-next-kind ${target.kind === "owned" ? "owned" : "reset"}`;
-    kind.textContent = target.kind === "owned" ? "（同じ構成）" : "（リセット）";
-    const name = document.createElement("strong");
-    name.textContent = comparisonTargetName(target);
-    if (hits.length === 0) {
-      item.classList.add("none");
-      when.textContent = "—";
-      const none = document.createElement("span");
-      none.className = "bonus-wish-next-wish";
-      none.textContent = "表示範囲内に一致なし（表示する回数を増やしてください）";
-      item.append(when, kind, name, none);
-    } else {
-      when.textContent = `あと${hits[0] + 1}回`;
-      const others = results.filter((other) => other.target !== target && other.hits.includes(hits[0])).length;
-      const wish = document.createElement("span");
-      wish.className = "bonus-wish-next-target";
-      wish.textContent = target.kind === "owned"
-        ? `希望：${ownedRuleText(target)}`
-        : `希望：${bonusWishText(target.weaponType)}`;
-      const note = document.createElement("span");
-      note.className = "bonus-wish-next-wish";
-      note.textContent = others > 0 ? `同じ回にほか${others}武器も一致` : "";
-      item.append(when, kind, name, wish, createCompactBonusSet(target, target.rolls[hits[0]], true), note);
-    }
-    list.append(item);
+  // 見出し付きの表：あと何回｜方法｜武器種・属性｜登録名｜希望｜結果（5枠）｜備考
+  const list = document.createElement("table");
+  list.className = "next-match-table";
+  const head = document.createElement("thead");
+  const headRow = document.createElement("tr");
+  for (const label of ["あと何回", "方法", "武器種・属性", "登録名", "希望", "結果（5枠）", "備考"]) {
+    const th = document.createElement("th");
+    th.scope = "col";
+    th.textContent = label;
+    headRow.append(th);
   }
+  head.append(headRow);
+  const body = document.createElement("tbody");
+  const cell = (className, ...children) => {
+    const td = document.createElement("td");
+    td.className = className;
+    td.append(...children);
+    return td;
+  };
+  for (const { target, hits } of results) {
+    const row = document.createElement("tr");
+    row.title = `条件：${targetWishText(target)}`;
+    // 方法：「リセット・同構成」の両方を書き、該当する方だけ強調
+    const method = document.createElement("span");
+    method.className = "method-pair";
+    const reset = document.createElement("span");
+    const same = document.createElement("span");
+    reset.textContent = "リセット";
+    same.textContent = "同構成";
+    reset.className = target.kind === "owned" ? "method-off" : "method-on reset";
+    same.className = target.kind === "owned" ? "method-on owned" : "method-off";
+    method.append(reset, "・", same);
+    const wish = document.createElement("span");
+    wish.className = "bonus-wish-next-target";
+    wish.textContent = target.kind === "owned" ? ownedRuleText(target) : bonusWishText(target.weaponType);
+    if (hits.length === 0) {
+      row.classList.add("none");
+      const none = document.createElement("span");
+      none.textContent = "表示範囲内に一致なし（表示する回数を増やしてください）";
+      row.append(
+        cell("next-when", "—"), cell("next-method", method), cell("next-weapon", weaponAndAttributeText(target)),
+        cell("next-label", target.label || "—"), cell("next-wish", wish), cell("next-result none-text", none), cell("next-note", ""),
+      );
+    } else {
+      const others = results.filter((other) => other.target !== target && other.hits.includes(hits[0])).length;
+      row.append(
+        cell("next-when", `あと${hits[0] + 1}回`), cell("next-method", method), cell("next-weapon", weaponAndAttributeText(target)),
+        cell("next-label", target.label || "—"), cell("next-wish", wish),
+        cell("next-result", createCompactBonusSet(target, target.rolls[hits[0]], true)),
+        cell("next-note", others > 0 ? `同じ回にほか${others}武器も一致` : ""),
+      );
+    }
+    body.append(row);
+  }
+  list.append(head, body);
 
   // 同じ回に2つの当たりが重なったら、他にも当たりがある武器はその次の当たりへずらす
   const plan = [];
@@ -3670,7 +3732,7 @@ function renderBonusWishSummary() {
     for (const { target, index } of plan) {
       const step = document.createElement("li");
       const advance = index + 1 - previous;
-      const name = comparisonTargetName(target);
+      const name = targetNameWithWeapon(target);
       const method = target.kind === "owned" ? "「同じ構成で再復元」" : "「リセットして再復元」";
       step.textContent = advance <= 0
         ? `${index + 1}回先：${name}（同じ回で別の武器と重なっています。どちらか1つを選んでください）`
