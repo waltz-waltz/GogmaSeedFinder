@@ -489,8 +489,12 @@ document.head.append(Object.assign(document.createElement("style"), {
     .bonus-tag .tier-up { margin-left: 2px; color: #7dff8a; font-weight: 900; text-shadow: 0 0 6px rgb(125 255 138 / 60%); }
     .bonus-tag .tier-down { margin-left: 2px; color: #ff7a6b; font-weight: 900; }
     .owned-update-button { border-color: #4f9a92; color: #bff3ec; }
-    .owned-remove-button { margin-left: auto; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 50%; background: #30332b; color: #c9c6b8; cursor: pointer; }
+    .owned-card-actions { display: inline-flex; gap: 6px; margin-left: auto; }
+    .owned-remove-button, .owned-move-button { width: 26px; height: 26px; padding: 0; border: 0; border-radius: 50%; background: #30332b; color: #c9c6b8; font-weight: 900; cursor: pointer; }
     .owned-remove-button:hover { background: #5a2e28; color: #fff; }
+    .owned-move-button:hover:not(:disabled) { background: #2f4f4b; color: #fff; }
+    .owned-move-button:disabled { opacity: 0.3; cursor: default; }
+    .owned-name-hint { margin: 0; color: #a9a690; font-size: 0.72rem; }
     .column-kind { display: block; margin-bottom: 2px; font-size: 0.62rem; font-weight: 700; letter-spacing: 0; color: #a9a690; }
     .column-layout { display: block; margin-top: 2px; font-size: 0.66rem; color: #8fe0d6; }
     .comparison-table thead th.owned-column-header { background: #17302d; border-bottom: 2px solid #4f9a92; }
@@ -699,6 +703,19 @@ const OWNED_RULE_OPTIONS = [
   ["total", "合計で強くなる（下がる枠があっても全体で上がる）"],
   ["ex", "EXの数で判定"],
 ];
+// 手持ち武器の名前の自動入力に使う「激化」と、武器種ごとの「種類」の最初の候補
+// （種類は自由に書けて、書いたものは武器種ごとに候補として覚える）
+const OWNED_BOOST_OPTIONS = [["", "なし"], ["攻撃激化", "【攻撃激化】"], ["属性激化", "【属性激化】"], ["会心激化", "【会心激化】"]];
+// 激化タイプで決まる種類（弓：ビン、ガンランス：砲撃タイプ、スラアク・チャアク：ビン、ライトボウガン：速射できる弾）。
+// 弓・ガンランス・ライトボウガン・狩猟笛（響玉）はユーザー確認済み。スラアク・チャアクは攻略サイト（GameWith）の表から
+const OWNED_SUBTYPE_BY_BOOST = {
+  5: { 攻撃激化: "状態異常＆属性やられ無効", 会心激化: "スタミナ継続回復", 属性激化: "防御力＆属性耐性UP" },
+  7: { 攻撃激化: "通常", 会心激化: "放射", 属性激化: "拡散" },
+  8: { 攻撃激化: "強撃", 会心激化: "強属性", 属性激化: "強属性" },
+  9: { 攻撃激化: "榴弾" },
+  11: { 攻撃激化: "接撃", 会心激化: "強撃", 属性激化: "貫通" },
+  13: { 攻撃激化: "通常・散弾", 会心激化: "通常・貫通", 属性激化: "散弾・貫通" },
+};
 let ownedWeapons = loadOwnedWeapons();
 let ownedWeaponSection = null;
 // 復元ボーナス未来予測の画面設定（登録欄の切り替え・表の表示）。このブラウザに保存
@@ -3255,6 +3272,10 @@ function loadBonusView() {
     registration: saved.registration === "owned" ? "owned" : "reset",
     matchesOnly: saved.matchesOnly !== false,
     showAllColumns: saved.showAllColumns === true,
+    // 手持ち武器の登録欄で直前に選んだもの（次の登録でも同じものを選んだ状態にする）
+    ownedForm: saved.ownedForm && typeof saved.ownedForm === "object" ? saved.ownedForm : {},
+    // 武器種ごとに使った「種類」（例：弓→貫通、ガンランス→通常）。名前の自動入力の候補にする
+    subtypeHistory: saved.subtypeHistory && typeof saved.subtypeHistory === "object" ? saved.subtypeHistory : {},
   };
 }
 function persistBonusView(view) {
@@ -3859,26 +3880,103 @@ function renderOwnedWeaponSection() {
   // 追加フォーム
   const form = document.createElement("div");
   form.className = "owned-weapon-form";
-  const nameLabel = document.createElement("label");
-  const nameText = document.createElement("span");
+  // 直前に選んだもの（なければ狙いの登録欄の選択）を選んだ状態で始める
+  const lastForm = loadBonusView().ownedForm;
+  const makeField = (labelText, control) => {
+    const label = document.createElement("label");
+    const text = document.createElement("span");
+    text.textContent = labelText;
+    label.append(text, control);
+    return label;
+  };
+  const boostSelect = document.createElement("select");
+  populateSelect(boostSelect, OWNED_BOOST_OPTIONS, OWNED_BOOST_OPTIONS.some(([value]) => value === lastForm.boost) ? lastForm.boost : "");
+  const weaponSelectEl = document.createElement("select");
+  populateSelect(weaponSelectEl, WEAPON_TYPES,
+    Number.isSafeInteger(lastForm.weaponType) ? lastForm.weaponType : Number(comparisonWeaponSelect.value));
+  const attributeSelectEl = document.createElement("select");
+  populateSelect(attributeSelectEl, ATTRIBUTES,
+    Number.isSafeInteger(lastForm.attributeForce) ? lastForm.attributeForce : Number(comparisonAttributeSelect.value));
+  const subtypeInput = document.createElement("input");
+  subtypeInput.type = "text";
+  subtypeInput.maxLength = 14;
+  subtypeInput.placeholder = "例：貫通／通常";
+  subtypeInput.value = typeof lastForm.subtype === "string" ? lastForm.subtype : "";
+  const subtypeList = document.createElement("datalist");
+  subtypeList.id = `owned-subtype-list-${Date.now()}`;
+  subtypeInput.setAttribute("list", subtypeList.id);
   const nameInput = document.createElement("input");
-  nameText.textContent = "名前（任意）";
   nameInput.type = "text";
   nameInput.maxLength = 24;
   nameInput.placeholder = "例：メイン雷弓";
-  nameLabel.append(nameText, nameInput);
-  const weaponLabel = document.createElement("label");
-  const weaponText = document.createElement("span");
-  const weaponSelectEl = document.createElement("select");
-  weaponText.textContent = "武器種";
-  populateSelect(weaponSelectEl, WEAPON_TYPES, Number(comparisonWeaponSelect.value));
-  weaponLabel.append(weaponText, weaponSelectEl);
-  const attributeLabel = document.createElement("label");
-  const attributeText = document.createElement("span");
-  const attributeSelectEl = document.createElement("select");
-  attributeText.textContent = "属性";
-  populateSelect(attributeSelectEl, ATTRIBUTES, Number(comparisonAttributeSelect.value));
-  attributeLabel.append(attributeText, attributeSelectEl);
+  const nameHint = document.createElement("p");
+  nameHint.className = "owned-name-hint";
+
+  // 名前の自動入力：「【攻撃激化】貫通 氷」。自分で書き換えたら、その後は上書きしない
+  let nameEditedByHand = false;
+  const autoName = () => {
+    const boost = boostSelect.value;
+    const subtype = subtypeInput.value.trim();
+    const attribute = optionName(ATTRIBUTES, Number(attributeSelectEl.value)).replace("属性", "");
+    const weapon = optionName(WEAPON_TYPES, Number(weaponSelectEl.value));
+    if (!boost && !subtype) return "";
+    return `${boost ? `【${boost}】` : ""}${subtype ? `${subtype} ${attribute}` : `${attribute}${weapon}`}`;
+  };
+  const updateName = () => {
+    if (!nameEditedByHand) nameInput.value = autoName();
+    nameHint.textContent = nameEditedByHand
+      ? "名前は手入力中です（自動入力に戻すには、名前を空にしてください）"
+      : "激化・種類・属性から名前を自動で入れます。自由に書き換えることもできます。";
+  };
+  const updateSubtypeList = () => {
+    const weaponType = Number(weaponSelectEl.value);
+    const history = loadBonusView().subtypeHistory[weaponType] ?? [];
+    const suggestions = [...new Set([...Object.values(OWNED_SUBTYPE_BY_BOOST[weaponType] ?? {}), ...history])];
+    subtypeList.replaceChildren(...suggestions.map((value) => {
+      const option = document.createElement("option");
+      option.value = value;
+      return option;
+    }));
+  };
+  const rememberForm = () => {
+    const view = loadBonusView();
+    view.ownedForm = {
+      boost: boostSelect.value,
+      weaponType: Number(weaponSelectEl.value),
+      attributeForce: Number(attributeSelectEl.value),
+      subtype: subtypeInput.value.trim(),
+    };
+    persistBonusView(view);
+  };
+  nameInput.addEventListener("input", () => {
+    nameEditedByHand = nameInput.value.trim() !== "";
+    updateName();
+  });
+  // 激化タイプで種類が決まる武器（弓・ガンランスなど）は、種類を自動で入れる
+  const applySubtypeFromBoost = () => {
+    const table = OWNED_SUBTYPE_BY_BOOST[Number(weaponSelectEl.value)];
+    if (table) subtypeInput.value = table[boostSelect.value] ?? "";
+  };
+  boostSelect.addEventListener("change", () => { applySubtypeFromBoost(); updateName(); rememberForm(); });
+  subtypeInput.addEventListener("input", () => { updateName(); rememberForm(); });
+  weaponSelectEl.addEventListener("change", () => {
+    // 武器種が変わったら、前の武器種の種類は合わないので入れ直す
+    subtypeInput.value = "";
+    applySubtypeFromBoost();
+    updateSubtypeList();
+    updateName();
+    rememberForm();
+  });
+  attributeSelectEl.addEventListener("change", () => { updateName(); rememberForm(); });
+  updateSubtypeList();
+  updateName();
+
+  const boostLabel = makeField("激化タイプ", boostSelect);
+  const weaponLabel = makeField("武器種", weaponSelectEl);
+  const attributeLabel = makeField("属性", attributeSelectEl);
+  const subtypeLabel = makeField("種類（激化で自動・書き換え可）", subtypeInput);
+  subtypeLabel.append(subtypeList);
+  const nameLabel = makeField("名前（任意・自動入力）", nameInput);
   const formRule = createOwnedRuleControls({ rule: "upgrade", minEx: 2 });
   const slots = document.createElement("div");
   slots.className = "owned-weapon-picker";
@@ -3921,13 +4019,22 @@ function renderOwnedWeaponSection() {
     }
     ownedWeapons.push(weapon);
     persistOwnedWeapons();
+    // 選んだ武器種・属性・激化・種類を覚え、種類は武器種ごとの候補に足す
+    rememberForm();
+    const subtype = subtypeInput.value.trim();
+    if (subtype) {
+      const view = loadBonusView();
+      const history = view.subtypeHistory[weapon.weaponType] ?? [];
+      view.subtypeHistory[weapon.weaponType] = [...new Set([subtype, ...history])].slice(0, 12);
+      persistBonusView(view);
+    }
     renderOwnedWeaponSection();
     void refreshComparisonPredictions();
   });
   const formRow = document.createElement("div");
   formRow.className = "owned-weapon-form-row";
-  formRow.append(nameLabel, weaponLabel, attributeLabel);
-  form.append(formRow, slots, formRule.wrap, addButton, error);
+  formRow.append(nameLabel, weaponLabel, attributeLabel, boostLabel, subtypeLabel);
+  form.append(formRow, nameHint, slots, formRule.wrap, addButton, error);
 
   // 登録済みの手持ち武器
   const cards = ownedWeapons.map((weapon) => {
@@ -3958,9 +4065,34 @@ function renderOwnedWeaponSection() {
       renderOwnedWeaponSection();
       void refreshComparisonPredictions();
     });
+    // 並び替え（表の列や一覧の順番にも反映される）
+    const moveButton = (text, label, offset) => {
+      const button = document.createElement("button");
+      const index = ownedWeapons.indexOf(weapon);
+      button.type = "button";
+      button.className = "owned-move-button";
+      button.textContent = text;
+      button.title = label;
+      button.setAttribute("aria-label", `${comparisonTargetName(weapon)}を${label}`);
+      button.disabled = index + offset < 0 || index + offset >= ownedWeapons.length;
+      button.addEventListener("click", (event) => {
+        event.preventDefault();
+        const from = ownedWeapons.indexOf(weapon);
+        const to = from + offset;
+        if (to < 0 || to >= ownedWeapons.length) return;
+        [ownedWeapons[from], ownedWeapons[to]] = [ownedWeapons[to], ownedWeapons[from]];
+        persistOwnedWeapons();
+        renderOwnedWeaponSection();
+        void refreshComparisonPredictions();
+      });
+      return button;
+    };
     summary.append(name, state);
     setupCollapsible(card, summary, `owned:${weapon.id}`, "クリックで今のボーナスと条件の設定欄が開きます");
-    summary.append(removeButton);
+    const actions = document.createElement("span");
+    actions.className = "owned-card-actions";
+    actions.append(moveButton("↑", "上へ移動", -1), moveButton("↓", "下へ移動", 1), removeButton);
+    summary.append(actions);
 
     const body = document.createElement("div");
     body.className = "weapon-filter-body";
