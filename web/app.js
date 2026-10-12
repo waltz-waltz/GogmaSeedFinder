@@ -297,8 +297,44 @@ document.head.append(Object.assign(document.createElement("style"), {
     .bonus-wish-plan { margin: 0; padding-left: 1.6em; display: grid; gap: 4px; font-size: 0.8rem; line-height: 1.6; }
     .comparison-table { --match-column-width: 150px; }
     .bonus-match-cell { min-width: var(--match-column-width); vertical-align: top; }
-    .bonus-match-cell .comparison-bonus-set { grid-template-columns: repeat(5, auto); justify-content: start; }
-    td.bonus-wish-hit { background: rgb(232 199 102 / 10%); box-shadow: inset 0 0 0 2px #e8c766; }
+    .bonus-match-cell .comparison-bonus-set { grid-template-columns: repeat(3, minmax(42px, auto)); justify-content: start; }
+    td.bonus-wish-hit { background: rgb(232 199 102 / 16%); box-shadow: inset 0 0 0 3px #e8c766, inset 0 0 18px rgb(232 199 102 / 25%); }
+    /* 一致した行：金色の帯と左の太線で目立たせる */
+    .prediction-table tbody tr.bonus-wish-row-hit,
+    .detail-compact-table tbody tr.prediction-match {
+      background: linear-gradient(90deg, rgb(232 199 102 / 20%), rgb(232 199 102 / 6%));
+    }
+    .prediction-table tbody tr.bonus-wish-row-hit > th:first-child,
+    .detail-compact-table tbody tr.prediction-match > th:first-child {
+      box-shadow: inset 5px 0 0 #e8c766;
+      color: #ffe39a;
+    }
+    .detail-match-badge {
+      display: inline-block; padding: 4px 9px; border-radius: 999px;
+      background: #e8c766; color: #1a1708; font-size: 0.74rem; font-weight: 900; white-space: nowrap;
+    }
+    /* EXをもっと目立たせる：太い枠・強い光・白っぽい文字 */
+    .bonus-tag.ex { border-width: 2px; font-weight: 900; text-shadow: 0 0 6px currentColor; }
+    .bonus-tag.attack.ex { border-color: #ff9a88; background: linear-gradient(135deg, rgb(205 70 52 / 70%), rgb(220 129 115 / 30%)); box-shadow: 0 0 0 1px rgb(255 154 136 / 45%), 0 0 16px rgb(230 85 65 / 55%); color: #fff3f0; }
+    .bonus-tag.affinity.ex { border-color: #ffd86a; background: linear-gradient(135deg, rgb(190 145 35 / 70%), rgb(224 189 89 / 30%)); box-shadow: 0 0 0 1px rgb(255 216 106 / 45%), 0 0 16px rgb(210 165 40 / 55%); color: #fffbe8; }
+    .bonus-tag.element.ex { border-color: #8fdcf5; background: linear-gradient(135deg, rgb(40 130 165 / 70%), rgb(105 183 208 / 30%)); box-shadow: 0 0 0 1px rgb(143 220 245 / 45%), 0 0 16px rgb(50 150 190 / 55%); color: #f0fbff; }
+    .bonus-tag.sharpness-ammo.ex { border-color: #c4b3ff; background: linear-gradient(135deg, rgb(110 85 180 / 70%), rgb(162 146 207 / 30%)); box-shadow: 0 0 0 1px rgb(196 179 255 / 45%), 0 0 16px rgb(120 95 200 / 55%); color: #f7f3ff; }
+    .bonus-tag:not(.ex) { opacity: 0.82; }
+    /* 「1条件を詳しく絞り込む」の表をスキル未来予測と同じ詰めた形に */
+    .detail-compact-table { --state-column-width: 140px; min-width: 760px; }
+    .detail-compact-table th, .detail-compact-table td { padding: 8px 7px; }
+    .detail-compact-table > thead > tr > th:nth-child(2),
+    .detail-compact-table > tbody > tr > td:nth-child(2) {
+      position: sticky; left: var(--offset-column-width); z-index: 2;
+      width: var(--state-column-width); min-width: var(--state-column-width);
+      background: #151612; box-shadow: 8px 0 12px rgb(0 0 0 / 20%);
+    }
+    .detail-compact-table > thead > tr > th:nth-child(2) { z-index: 5; background: #20221c; }
+    .detail-compact-table tbody tr.prediction-match > td:nth-child(2) { background: #2a2617; }
+    .detail-match-cell { width: 80px; }
+    .detail-bonus-set { display: flex; flex-wrap: wrap; gap: 5px; }
+    .detail-bonus-set .bonus-tag { min-width: 112px; padding: 5px 7px; }
+    .detail-result-cell .keep-transition-button { display: inline-block; width: auto; margin-top: 6px; padding-inline: 14px; }
     @media (min-width: 900px) {
       .comparison-table > thead > tr > th:nth-child(3),
       .comparison-table > tbody > tr > td:nth-child(3) {
@@ -310,7 +346,8 @@ document.head.append(Object.assign(document.createElement("style"), {
       }
       .comparison-table > thead > tr > th:nth-child(3) { z-index: 5; background: #20221c; }
       .comparison-table > tbody > tr > td:nth-child(2) { box-shadow: none; }
-      .comparison-table > tbody > tr.bonus-wish-row-hit > td:nth-child(3) { background: #1d2418; }
+      .comparison-table > tbody > tr.bonus-wish-row-hit > td:nth-child(2),
+      .comparison-table > tbody > tr.bonus-wish-row-hit > td:nth-child(3) { background: #2a2617; }
     }
   `,
 }));
@@ -489,6 +526,13 @@ const persistedAppState = loadPersistedAppState();
 let saveState = persistedAppState.saveState;
 let comparisonTargets = persistedAppState.targets;
 let bonusPrediction = persistedAppState.bonusPrediction;
+// 武器種ごとの希望ボーナス { [weaponType]: { counts: [攻撃, 会心, 属性, 斬れ味・装填], minEx } }
+const BONUS_WISHES_KEY = "gogma-seed-finder-bonus-wishes-v1";
+const BONUS_WISH_MAX = [5, 5, 4, 2];
+let bonusWishes = loadJsonObject(BONUS_WISHES_KEY);
+// 「1条件を詳しく絞り込む」でII・III・EXまで指定した希望 { [weaponType]: bonusId[] }
+const DETAIL_TIER_WISHES_KEY = "gogma-seed-finder-detail-tier-wishes-v1";
+let detailTierWishes = loadJsonObject(DETAIL_TIER_WISHES_KEY);
 renderObservationRows(SAMPLE_OBSERVATIONS);
 renderSkillObservationRows(Array.from({ length: 4 }, () => null));
 updateBonusPoolNote();
@@ -515,10 +559,6 @@ let skillPredictionRollSets = [];
 const WEAPON_SKILL_FILTERS_KEY = "gogma-seed-finder-weapon-filters-v1";
 let weaponSkillFilters = loadWeaponSkillFilters();
 let weaponFilterSection = null;
-// 武器種ごとの希望ボーナス { [weaponType]: { counts: [攻撃, 会心, 属性, 斬れ味・装填], minEx } }
-const BONUS_WISHES_KEY = "gogma-seed-finder-bonus-wishes-v1";
-const BONUS_WISH_MAX = [5, 5, 4, 2];
-let bonusWishes = loadBonusWishes();
 let bonusWishSection = null;
 let bonusWishSummary = null;
 let bonusWishMatchesOnly = null;
@@ -627,30 +667,28 @@ tabButtons.forEach((button) => {
   button.addEventListener("click", () => setActiveTab(button.dataset.tab));
 });
 
+// 希望は武器種ごとに覚えているので、武器種を変えたらその武器種の希望を呼び出す
 predictionWeaponSelect.addEventListener("change", () => {
-  const currentFilters = snapshotPredictionFilters();
-  renderPredictionFilters(currentFilters);
+  renderPredictionFilters();
   updatePredictionPoolNote();
   void refreshPredictions();
 });
 
 predictionAttributeSelect.addEventListener("change", () => {
-  const currentFilters = snapshotPredictionFilters();
-  renderPredictionFilters(currentFilters);
+  renderPredictionFilters();
   updatePredictionPoolNote();
   void refreshPredictions();
 });
 predictionCountInput.addEventListener("change", () => void refreshPredictions());
 predictionIgnoreTier.addEventListener("change", () => {
-  const currentFilters = snapshotPredictionFilters();
-  const nextFilters = predictionIgnoreTier.checked
-    ? currentFilters.map((value) => value === null ? null : bonusCategoryId(value))
-    : [];
-  renderPredictionFilters(nextFilters);
+  renderPredictionFilters();
   renderPredictionTable();
 });
 predictionMatchesOnly.addEventListener("change", () => renderPredictionTable());
-predictionFilters.addEventListener("change", () => renderPredictionTable());
+predictionFilters.addEventListener("change", () => {
+  saveDetailFilters();
+  renderPredictionTable();
+});
 
 addComparisonTargetButton.addEventListener("click", () => void addComparisonTarget());
 clearComparisonTargetsButton.addEventListener("click", () => {
@@ -684,8 +722,7 @@ document.querySelector("#bonus-operation-selector").addEventListener("change", (
   bonusPrediction.mode = bonusOperationKeep.checked ? "keep" : "reset";
   renderBonusOperation();
   persistAppState();
-  const currentFilters = snapshotPredictionFilters();
-  renderPredictionFilters(currentFilters);
+  renderPredictionFilters();
   updatePredictionPoolNote();
   void Promise.all([refreshPredictions(), refreshComparisonPredictions()]);
 });
@@ -1886,7 +1923,51 @@ async function selectCandidate(candidate) {
   setActiveTab("bonus-future");
 }
 
-function renderPredictionFilters(values = []) {
+function loadJsonObject(key) {
+  try {
+    const saved = JSON.parse(localStorage.getItem(key) ?? "{}");
+    return saved && typeof saved === "object" ? saved : {};
+  } catch {
+    return {};
+  }
+}
+
+// 「強化段階を区別しない」ときは武器種ごとの希望ボーナス（系統の数）を、
+// 区別するときはII・III・EXまで指定した希望を、武器種ごとに呼び出す
+function detailFilterValuesFor(weaponType) {
+  if (predictionIgnoreTier.checked) {
+    return bonusWishFor(weaponType).counts
+      .flatMap((count, category) => Array.from({ length: count }, () => category))
+      .slice(0, 5);
+  }
+  const saved = detailTierWishes[weaponType];
+  return Array.isArray(saved) ? saved : [];
+}
+
+function saveDetailFilters() {
+  const weaponType = Number(predictionWeaponSelect.value);
+  const values = snapshotPredictionFilters().filter((value) => value !== null);
+  if (predictionIgnoreTier.checked) {
+    const counts = [0, 0, 0, 0];
+    for (const category of values) counts[category] += 1;
+    const minEx = bonusWishFor(weaponType).minEx;
+    if (counts.some((count) => count > 0) || minEx > 0) bonusWishes[weaponType] = { counts, minEx };
+    else delete bonusWishes[weaponType];
+    persistBonusWishes();
+    renderBonusWishSection();
+    renderComparisonTable();
+    return;
+  }
+  if (values.length > 0) detailTierWishes[weaponType] = values;
+  else delete detailTierWishes[weaponType];
+  try {
+    localStorage.setItem(DETAIL_TIER_WISHES_KEY, JSON.stringify(detailTierWishes));
+  } catch {
+    // The app remains usable when storage is unavailable.
+  }
+}
+
+function renderPredictionFilters(values = detailFilterValuesFor(Number(predictionWeaponSelect.value))) {
   const weaponType = Number(predictionWeaponSelect.value);
   const attributeForce = Number(predictionAttributeSelect.value);
   const ignoreTier = predictionIgnoreTier.checked;
@@ -2098,11 +2179,12 @@ function renderPredictionTable() {
     predictionStatus.textContent = `${predictionRolls.length.toLocaleString("ja-JP")}回中 ${matchedRolls.length.toLocaleString("ja-JP")}回一致`;
   }
   predictionStatus.className = "status-pill complete";
+  renderDetailPredictionHeader();
 
   if (visibleRolls.length === 0) {
     const row = document.createElement("tr");
     const cell = document.createElement("td");
-    cell.colSpan = 7;
+    cell.colSpan = 4;
     cell.className = "prediction-empty";
     cell.textContent = "指定した構成は表示範囲内にありません。表示回数を増やしてください。";
     row.append(cell);
@@ -2146,32 +2228,63 @@ function createPredictionRow(roll, requirements) {
     offsetCell.append(badge);
   }
   row.append(offsetCell);
+  // スキル未来予測と同じく、保存後の状態は小さく表示する
+  row.append(createSavedStateCell("bonus", roll.index + 1, null, true));
 
-  row.append(createSavedStateCell(
-    "bonus",
-    roll.index + 1,
-    bonusPrediction.mode === "reset"
-      ? {
-          target: {
-            weaponType,
-            attributeForce: Number(predictionAttributeSelect.value),
-            label: "",
-          },
-          bonusIds: roll.bonusIds,
-        }
-      : null,
-  ));
+  const matchCell = document.createElement("td");
+  matchCell.className = "detail-match-cell";
+  if (matches) {
+    const badge = document.createElement("span");
+    badge.className = "detail-match-badge";
+    badge.textContent = "★ 一致";
+    matchCell.append(badge);
+  } else {
+    const none = document.createElement("span");
+    none.className = "skill-match-none";
+    none.textContent = "—";
+    matchCell.append(none);
+  }
+  row.append(matchCell);
 
+  const resultCell = document.createElement("td");
+  resultCell.className = "detail-result-cell";
+  const tags = document.createElement("div");
+  tags.className = "detail-bonus-set";
   for (const bonusId of roll.bonusIds) {
-    const cell = document.createElement("td");
     const tag = document.createElement("span");
     tag.className = `bonus-tag ${bonusClassName(bonusId)}${EX_BONUS_IDS.has(bonusId) ? " ex" : ""}`;
     tag.textContent = gogmaBonusName(weaponType, bonusId);
-    cell.append(tag);
-    row.append(cell);
+    tags.append(tag);
   }
+  resultCell.append(tags);
+  if (bonusPrediction.mode === "reset") {
+    const keepButton = document.createElement("button");
+    keepButton.type = "button";
+    keepButton.className = "keep-transition-button";
+    keepButton.textContent = "この構成でEX厳選へ";
+    keepButton.addEventListener("click", () => void beginKeepOptimization(
+      { weaponType, attributeForce: Number(predictionAttributeSelect.value), label: "" },
+      roll.bonusIds,
+      roll.index + 1,
+    ));
+    resultCell.append(keepButton);
+  }
+  row.append(resultCell);
 
   return row;
+}
+
+function renderDetailPredictionHeader() {
+  const table = predictionRows.closest("table");
+  const headerRow = table?.querySelector("thead tr");
+  if (!headerRow) return;
+  table.classList.add("detail-compact-table");
+  headerRow.replaceChildren(...["何回先", "保存後の状態", "一致", "5枠の結果"].map((label) => {
+    const header = document.createElement("th");
+    header.scope = "col";
+    header.textContent = label;
+    return header;
+  }));
 }
 
 function createSavedStateCell(kind, completedRolls, keepTransition = null, compact = false) {
@@ -2646,15 +2759,6 @@ function createCompactBonusSet(target, bonusIds) {
   return bonusSet;
 }
 
-function loadBonusWishes() {
-  try {
-    const saved = JSON.parse(localStorage.getItem(BONUS_WISHES_KEY) ?? "{}");
-    return saved && typeof saved === "object" ? saved : {};
-  } catch {
-    return {};
-  }
-}
-
 function persistBonusWishes() {
   try {
     localStorage.setItem(BONUS_WISHES_KEY, JSON.stringify(bonusWishes));
@@ -2827,6 +2931,11 @@ function renderBonusWishSection() {
       updateState();
       updateTotal();
       renderComparisonTable();
+      // 下の「1条件を詳しく絞り込む」が同じ武器種なら、希望をそろえる
+      if (predictionIgnoreTier.checked && Number(predictionWeaponSelect.value) === weaponType) {
+        renderPredictionFilters();
+        renderPredictionTable();
+      }
     };
     categoryGrid.addEventListener("change", save);
     exSelect.addEventListener("change", save);
@@ -2865,6 +2974,8 @@ function renderBonusWishSummary() {
     });
     return { target, hits };
   });
+  // 近い当たりから順に並べ、表示範囲内に当たりがない武器は最後にまとめる
+  results.sort((a, b) => (a.hits[0] ?? Infinity) - (b.hits[0] ?? Infinity));
 
   const title = document.createElement("h3");
   title.textContent = `次の一致（表示中の${count.toLocaleString("ja-JP")}回の中）`;
