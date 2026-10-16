@@ -307,6 +307,17 @@ document.head.append(Object.assign(document.createElement("style"), {
     .comparison-more-bar[hidden] { display: none; }
     .comparison-more-status { color: #b9b6a4; font-size: 0.78rem; }
     .comparison-more-bar .text-button { color: #ffffff; }
+    /* 追加の横スクロールバー：表の上と、画面の下にくっつくもの */
+    .table-scroll-mirror { overflow-x: auto; overflow-y: hidden; height: 18px; scrollbar-color: #8e7a45 #20211c; }
+    .table-scroll-mirror[hidden] { display: none; }
+    .table-scroll-mirror > div { height: 1px; }
+    .table-scroll-mirror.top { margin-top: 12px; }
+    .table-scroll-mirror.bottom { position: sticky; bottom: 0; z-index: 8; background: #151612; border-top: 1px solid #454233; }
+    /* 横に並べた表の各マスの小見出し（どの行でも武器が分かるように） */
+    .cell-target-label { margin-bottom: 4px; font-size: 0.7rem; font-weight: 700; color: #e8c766; white-space: nowrap; }
+    .cell-target-label.owned { color: #8fe0d6; }
+    .cell-target-label .weapon-badge { margin-right: 3px; padding: 0 5px; font-size: 0.68rem; }
+    .next-match-table .next-action .match-adopt-button { margin: 0; white-space: nowrap; }
     /* 次の一致：見出し付きの表 */
     .bonus-wish-summary { overflow-x: auto; }
     .next-match-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
@@ -394,7 +405,7 @@ document.head.append(Object.assign(document.createElement("style"), {
     .bonus-wish-next-result { font-weight: 800; color: #cfeec0; }
     .bonus-wish-next-list li.none .bonus-wish-next-result { color: #888; font-weight: 400; }
     .bonus-wish-plan { margin: 0; padding-left: 1.6em; display: grid; gap: 4px; font-size: 0.8rem; line-height: 1.6; }
-    .comparison-table { --match-column-width: 150px; }
+    .comparison-table { --match-column-width: 240px; }
     .bonus-match-cell { min-width: var(--match-column-width); vertical-align: top; }
     .bonus-match-cell .comparison-bonus-set { grid-template-columns: repeat(3, minmax(42px, auto)); justify-content: start; }
     td.bonus-wish-hit { background: rgb(232 199 102 / 16%); box-shadow: inset 0 0 0 3px #e8c766, inset 0 0 18px rgb(232 199 102 / 25%); }
@@ -760,6 +771,8 @@ let showAllComparisonColumns = null;
 const COMPARISON_PAGE_SIZE = 10;
 let comparisonRowLimit = COMPARISON_PAGE_SIZE;
 let comparisonMoreBar = null;
+// 横に長い表のための追加の横スクロールバー（表の上・画面の下）
+let tableScrollMirrors = [];
 // 開け閉めできる欄は最初は閉じておき、開いた欄は書き直しても開いたままにする
 const openDetailKeys = new Set();
 // 武器種ごとの希望ボーナス { [weaponType]: { counts: [攻撃, 会心, 属性, 斬れ味・装填] } }
@@ -3022,6 +3035,7 @@ function renderComparisonTable() {
     if (comparisonMoreBar) comparisonMoreBar.hidden = true;
     updateComparisonStatus();
     renderBonusWishSummary();
+    updateTableScrollMirrors();
     return;
   }
 
@@ -3087,6 +3101,7 @@ function renderComparisonTable() {
   comparisonStatus.textContent = `狙い${resetCount}・手持ち${ownedCount} × ${count.toLocaleString("ja-JP")}回${filterStatus}`;
   comparisonStatus.className = "status-pill complete";
   renderBonusWishSummary();
+  updateTableScrollMirrors();
 }
 
 function exportVisibleBonusPredictionsCsv() {
@@ -3122,6 +3137,44 @@ function exportVisibleBonusPredictionsCsv() {
     rows,
   );
   bonusExportStatus.textContent = `${rows.length.toLocaleString("ja-JP")}行・${headers.length.toLocaleString("ja-JP")}列をCSVへ出力しました。`;
+}
+
+// 横に長い表のための横スクロールバー（表の上と、画面の下にくっつくもの）。表と動きを合わせる
+function setupTableScrollMirrors() {
+  if (tableScrollMirrors.length > 0) return;
+  tableScrollMirrors = ["top", "bottom"].map((position) => {
+    const mirror = document.createElement("div");
+    const inner = document.createElement("div");
+    mirror.className = `table-scroll-mirror ${position}`;
+    mirror.title = "左右に動かすと表が横に動きます";
+    mirror.append(inner);
+    if (position === "top") comparisonTableWrap.before(mirror);
+    else comparisonTableWrap.after(mirror);
+    return mirror;
+  });
+  let syncing = false;
+  const syncFrom = (source) => {
+    if (syncing) return;
+    syncing = true;
+    for (const element of [comparisonTableWrap, ...tableScrollMirrors]) {
+      if (element !== source) element.scrollLeft = source.scrollLeft;
+    }
+    syncing = false;
+  };
+  for (const element of [comparisonTableWrap, ...tableScrollMirrors]) {
+    element.addEventListener("scroll", () => syncFrom(element));
+  }
+  window.addEventListener("resize", () => updateTableScrollMirrors());
+}
+
+function updateTableScrollMirrors() {
+  const overflowing = !comparisonTableWrap.hidden
+    && comparisonTableWrap.scrollWidth > comparisonTableWrap.clientWidth + 2;
+  for (const mirror of tableScrollMirrors) {
+    mirror.hidden = !overflowing;
+    mirror.firstElementChild.style.width = `${comparisonTableWrap.scrollWidth}px`;
+    mirror.scrollLeft = comparisonTableWrap.scrollLeft;
+  }
 }
 
 // 表の下の「続きを10回分表示」「すべて表示」
@@ -3202,7 +3255,11 @@ function createComparisonRow(index) {
       bonusSet.append(createAdoptAsOwnedButton(target, target.rolls[index], index + 1));
     }
     cell.classList.add("comparison-result-cell");
-    cell.append(bonusSet);
+    // 見出しは表の上にしかないので、どの行でも分かるよう各マスにも「弓・火（リセット）」を付ける
+    const cellLabel = document.createElement("div");
+    cellLabel.className = `cell-target-label ${target.kind === "owned" ? "owned" : "reset"}`;
+    cellLabel.append(...createWeaponBadge(target), target.kind === "owned" ? "（同構成）" : "（リセット）");
+    cell.append(cellLabel, bonusSet);
     row.append(cell);
   }
 
@@ -3534,6 +3591,7 @@ function setupComparisonTableOptions() {
   countHint.textContent = "「表示する回数」は、何回先まで予測するかです（上の「次の一致」にも使われます）。";
   bar.append(countHint);
   comparisonTableWrap.before(bar);
+  setupTableScrollMirrors();
 }
 
 function renderBonusWishSection() {
@@ -3700,7 +3758,7 @@ function renderBonusWishSummary() {
   list.className = "next-match-table";
   const head = document.createElement("thead");
   const headRow = document.createElement("tr");
-  for (const label of ["あと何回", "方法", "武器種・属性", "登録名", "希望", "結果（5枠）", "備考"]) {
+  for (const label of ["あと何回", "方法", "武器種・属性", "登録名", "希望", "結果（5枠）", "備考", "採用"]) {
     const th = document.createElement("th");
     th.scope = "col";
     th.textContent = label;
@@ -3737,14 +3795,21 @@ function renderBonusWishSummary() {
       row.append(
         cell("next-when", "—"), cell("next-method", method), cell("next-weapon", weaponAndAttributeText(target)),
         cell("next-label", target.label || "—"), cell("next-wish", wish), cell("next-result none-text", none), cell("next-note", ""),
+        cell("next-action", ""),
       );
     } else {
       const others = results.filter((other) => other.target !== target && other.hits.includes(hits[0])).length;
+      // その回の結果を採用するボタン（狙い：手持ちに登録／手持ち：手持ちを更新）
+      const adoptButton = target.kind === "owned"
+        ? createAdoptOwnedUpdateButton(target, target.rolls[hits[0]], hits[0] + 1)
+        : createAdoptAsOwnedButton(target, target.rolls[hits[0]], hits[0] + 1);
+      adoptButton.classList.add("match-adopt-button");
       row.append(
         cell("next-when", `あと${hits[0] + 1}回`), cell("next-method", method), cell("next-weapon", weaponAndAttributeText(target)),
         cell("next-label", target.label || "—"), cell("next-wish", wish),
         cell("next-result", createCompactBonusSet(target, target.rolls[hits[0]], true)),
         cell("next-note", others > 0 ? `同じ回にほか${others}武器も一致` : ""),
+        cell("next-action", adoptButton),
       );
     }
     body.append(row);
