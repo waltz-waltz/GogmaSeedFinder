@@ -408,12 +408,11 @@ document.head.append(Object.assign(document.createElement("style"), {
     .owned-form-subtitle { margin: 4px 0 0; color: #d6d3c5; font-size: 0.78rem; font-weight: 800; }
     .owned-skill-picker { display: grid; gap: 12px; }
     .owned-skill-options { max-height: none; }
-    /* スキル未来予測：所持済みの印と、狙う激化で所持済みのマスを薄く */
+    /* スキル未来予測：「所持済み：弓・火（攻撃激化）」の印 */
     .skill-owned-badge {
       display: inline-block; margin-top: 4px; padding: 2px 8px; border-radius: 6px;
-      background: #17302d; border: 1px solid #4f9a92; color: #bff3ec; font-size: 0.72rem; font-weight: 800;
+      background: #17302d; border: 1px solid #4f9a92; color: #bff3ec; font-size: 0.74rem; font-weight: 800;
     }
-    td.skill-owned-cell .skill-result-pair { opacity: 0.35; filter: grayscale(0.8); }
     .skill-adopt { position: relative; margin-top: 6px; }
     .skill-adopt-menu {
       position: absolute; z-index: 20; top: calc(100% + 4px); left: 0; display: grid; gap: 6px; min-width: 300px;
@@ -4095,11 +4094,6 @@ function ownedSkillHolders(target, roll) {
     && weapon.groupIndex === roll.groupIndex);
 }
 
-// 狙う激化タイプ（空なら「どれでも」）の手持ち武器ですでに持っているか
-function ownedSkillAlreadyHeld(target, roll, wantedBoost) {
-  return ownedSkillHolders(target, roll).some((weapon) => !wantedBoost || weapon.boost === wantedBoost);
-}
-
 function ownedWeaponDefaultName(weapon) {
   return localizedTargetName(
     optionName(WEAPON_TYPES, weapon.weaponType),
@@ -4848,19 +4842,7 @@ function skillFilterForTarget(filter, target) {
     groupIndex: entry.groupIndex,
     operator: "and",
     seriesIndices: new Set(entry.seriesIndices),
-    boost: entry.boost ?? "",
   };
-}
-
-// 武器種ごとの「狙う激化タイプ」（空＝どれでも）。条件を指定していない武器種でも使う
-function wantedBoostFor(weaponType) {
-  return weaponSkillFilters[weaponType]?.boost ?? "";
-}
-
-// 条件に合い、しかも狙う激化タイプの手持ち武器でまだ持っていない組み合わせか
-function skillRollIsWanted(target, roll, filter) {
-  return skillRollMatchesFilter(roll, filter)
-    && !ownedSkillAlreadyHeld(target, roll, wantedBoostFor(target.weaponType));
 }
 
 function renderWeaponFilterSection() {
@@ -4900,15 +4882,12 @@ function renderWeaponFilterSection() {
     name.textContent = t(optionName(WEAPON_TYPES, weaponType));
     const state = document.createElement("span");
     state.className = "weapon-filter-state";
-    const stateText = (current) => {
-      const skills = hasWeaponSkillFilter(weaponType)
-        ? [
-            current.groupIndex >= 0 ? GROUP_SKILLS[current.groupIndex] : null,
-            current.seriesIndices.length > 0 ? current.seriesIndices.map((i) => SERIES_SKILLS[i]).join(" / ") : null,
-          ].filter(Boolean).join(" ＋ ")
-        : "共通の条件を使用";
-      return `${skills}｜狙う激化：${current.boost || "どれでも"}`;
-    };
+    const stateText = (current) => hasWeaponSkillFilter(weaponType)
+      ? [
+          current.groupIndex >= 0 ? GROUP_SKILLS[current.groupIndex] : null,
+          current.seriesIndices.length > 0 ? current.seriesIndices.map((i) => SERIES_SKILLS[i]).join(" / ") : null,
+        ].filter(Boolean).join(" ＋ ")
+      : "共通の条件を使用";
     state.textContent = stateText(entry);
     summary.append(name, state);
     setupCollapsible(row, summary, `skill-filter:${weaponType}`);
@@ -4952,20 +4931,12 @@ function renderWeaponFilterSection() {
     clearButton.className = "text-button";
     clearButton.textContent = "この武器種の条件をクリア";
 
-    // 狙う激化タイプ：この激化タイプの手持ち武器ですでに持っている組み合わせは「一致」から外す
-    const boostLabel = document.createElement("label");
-    boostLabel.textContent = "狙う激化タイプ（この激化の手持ち武器で持っている組み合わせは一致から外す）";
-    const boostSelect = document.createElement("select");
-    populateSelect(boostSelect, [["", "どれでも（どの激化で持っていても外す）"], ...OWNED_BOOST_OPTIONS.slice(1)], entry.boost ?? "");
-    boostLabel.append(boostSelect);
-
     const save = () => {
       const next = {
         groupIndex: Number(groupSelect.value),
         seriesIndices: [...seriesOptions.querySelectorAll("input:checked")].map((c) => Number(c.value)),
-        boost: boostSelect.value,
       };
-      if (next.groupIndex >= 0 || next.seriesIndices.length > 0 || next.boost) weaponSkillFilters[weaponType] = next;
+      if (next.groupIndex >= 0 || next.seriesIndices.length > 0) weaponSkillFilters[weaponType] = next;
       else delete weaponSkillFilters[weaponType];
       persistWeaponSkillFilters();
       state.textContent = stateText(next);
@@ -4973,17 +4944,15 @@ function renderWeaponFilterSection() {
     };
     groupSelect.addEventListener("change", save);
     seriesOptions.addEventListener("change", save);
-    boostSelect.addEventListener("change", save);
     clearButton.addEventListener("click", () => {
       groupSelect.value = "-1";
-      boostSelect.value = "";
       seriesOptions.querySelectorAll("input").forEach((c) => (c.checked = false));
       groupSelect.dispatchEvent(new Event("change"));
     });
 
     const body = document.createElement("div");
     body.className = "weapon-filter-body";
-    body.append(boostLabel, groupLabel, seriesFieldset, clearButton);
+    body.append(groupLabel, seriesFieldset, clearButton);
     row.append(summary, body);
     return row;
   });
@@ -5013,7 +4982,7 @@ function skillPredictionVisibility(filter = selectedSkillFilter()) {
   const count = skillPredictionRollSets[0].rolls.length;
   const allIndices = Array.from({ length: count }, (_, index) => index);
   const rowMatchesFilter = (index) => skillPredictionRollSets.some((target) =>
-    skillRollIsWanted(target, target.rolls[index], skillFilterForTarget(filter, target))
+    skillRollMatchesFilter(target.rolls[index], skillFilterForTarget(filter, target))
   );
   const matchingIndices = allIndices.filter(rowMatchesFilter);
   return {
@@ -5031,7 +5000,7 @@ function renderSkillPredictionTable() {
   const { count, matchingRowCount, visibleIndices } = skillPredictionVisibility(skillFilter);
   const conditionMatchCount = skillPredictionRollSets.reduce((total, target) => {
     const targetFilter = skillFilterForTarget(skillFilter, target);
-    return total + target.rolls.filter((roll) => skillRollIsWanted(target, roll, targetFilter)).length;
+    return total + target.rolls.filter((roll) => skillRollMatchesFilter(roll, targetFilter)).length;
   }, 0);
 
   const filterStatus = skillFilter.enabled
@@ -5135,13 +5104,11 @@ function createSkillPredictionRow(index, skillFilter, highlightEnabled) {
   for (const target of skillPredictionRollSets) {
     const roll = target.rolls[index];
     const cell = document.createElement("td");
-    // すでに持っている組み合わせ（狙う激化タイプの手持ち武器で）は一致から外し、薄くする
-    const heldForWanted = ownedSkillAlreadyHeld(target, roll, wantedBoostFor(target.weaponType));
-    const conditionMatch = highlightEnabled && skillRollIsWanted(target, roll, skillFilterForTarget(skillFilter, target));
+    const conditionMatch = highlightEnabled && skillRollMatchesFilter(roll, skillFilterForTarget(skillFilter, target));
     cell.append(createSkillResultPair(roll, conditionMatch));
+    // すでに持っている組み合わせは、一致から外さずに「所持済み：弓・火（攻撃激化）」と表示するだけ
     const holdersBadge = createOwnedSkillBadge(target, roll);
     if (holdersBadge) cell.append(holdersBadge);
-    if (heldForWanted) cell.classList.add("skill-owned-cell");
     row.append(cell);
 
     if (conditionMatch) {
@@ -5166,14 +5133,15 @@ function createSkillPredictionRow(index, skillFilter, highlightEnabled) {
   return row;
 }
 
-// 「所持：攻撃激化／属性激化」の印。その武器種・属性で同じ組み合わせを持っていなければ null
+// 「所持済み：弓・火（攻撃激化）」の印。その武器種・属性で同じ組み合わせを持っていなければ null
 function createOwnedSkillBadge(target, roll) {
   const holders = ownedSkillHolders(target, roll);
   if (holders.length === 0) return null;
   const badge = document.createElement("div");
   badge.className = "skill-owned-badge";
-  const boosts = [...new Set(holders.map((weapon) => weapon.boost || "激化不明"))];
-  badge.textContent = `所持：${boosts.join("／")}`;
+  const lines = [...new Set(holders.map((weapon) =>
+    `${weaponAndAttributeText(weapon)}（${weapon.boost || "激化未設定"}）`))];
+  badge.textContent = `所持済み：${lines.join("／")}`;
   badge.title = holders.map((weapon) => comparisonTargetName(weapon)).join("\n");
   return badge;
 }
