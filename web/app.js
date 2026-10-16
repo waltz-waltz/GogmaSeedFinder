@@ -308,18 +308,25 @@ document.head.append(Object.assign(document.createElement("style"), {
     .comparison-more-status { color: #b9b6a4; font-size: 0.78rem; }
     .comparison-more-bar .text-button { color: #ffffff; }
     /* 追加の横スクロールバー：表の上と、画面の下にくっつくもの */
-    /* 目立つように太く・金色に */
-    .table-scroll-mirror { overflow-x: auto; overflow-y: hidden; height: 22px; scrollbar-color: #e8c766 #2b2c25; scrollbar-width: auto; }
-    .table-scroll-mirror::-webkit-scrollbar { height: 18px; }
-    .table-scroll-mirror::-webkit-scrollbar-track { background: #2b2c25; }
-    .table-scroll-mirror::-webkit-scrollbar-thumb { background: #e8c766; border: 3px solid #2b2c25; border-radius: 999px; }
-    .table-scroll-mirror[hidden] { display: none; }
-    .table-scroll-mirror > div { height: 1px; }
-    .table-scroll-mirror.top { margin-top: 12px; border: 1px solid #8e7a45; border-radius: 8px; }
-    .table-scroll-mirror.bottom {
-      position: sticky; bottom: 0; z-index: 8; height: 26px;
-      background: #2b2c25; border: 2px solid #e8c766; border-radius: 8px 8px 0 0; box-shadow: 0 -6px 16px rgb(0 0 0 / 50%);
+    /* 追加の横スクロールバー：案内文＋◀ バー ▶。溝をはっきり見せる */
+    .table-scroll-holder {
+      display: grid; grid-template-columns: auto 28px minmax(0, 1fr) 28px; gap: 8px; align-items: center;
+      padding: 6px 10px; background: #2b2c25; border: 2px solid #e8c766; border-radius: 10px;
     }
+    .table-scroll-holder[hidden] { display: none; }
+    .table-scroll-holder.top { margin-top: 12px; }
+    .table-scroll-holder.bottom { position: sticky; bottom: 0; z-index: 8; border-radius: 10px 10px 0 0; box-shadow: 0 -6px 16px rgb(0 0 0 / 50%); }
+    .table-scroll-caption { color: #ffe39a; font-size: 0.74rem; font-weight: 800; white-space: nowrap; }
+    .table-scroll-arrow { display: grid; place-items: center; height: 24px; border-radius: 6px; background: #3a3b31; color: #ffe39a; font-size: 0.8rem; cursor: pointer; user-select: none; }
+    .table-scroll-arrow:hover { background: #4a4330; }
+    .table-scroll-mirror { overflow-x: auto; overflow-y: hidden; height: 20px; border-radius: 999px; background: #141510; box-shadow: inset 0 0 0 1px #6b6a55; scrollbar-color: #e8c766 #141510; }
+    .table-scroll-mirror::-webkit-scrollbar { height: 16px; }
+    .table-scroll-mirror::-webkit-scrollbar-track { background: #141510; border-radius: 999px; }
+    .table-scroll-mirror::-webkit-scrollbar-thumb { background: #e8c766; border: 3px solid #141510; border-radius: 999px; }
+    .table-scroll-mirror > div { height: 1px; }
+    /* 「何回先」の行と行の区切り：白い中太の線 */
+    .comparison-table > tbody > tr:not(.repeat-header-row) > th,
+    .comparison-table > tbody > tr:not(.repeat-header-row) > td { border-bottom: 3px solid rgb(240 240 240 / 75%); }
     /* 何回先ごとに入れ直す見出しの行 */
     .comparison-table > tbody > tr.repeat-header-row > th {
       padding: 6px 7px; border-top: 2px solid #5a5236; background: #20221c; color: #c8c5b5;
@@ -3166,14 +3173,30 @@ function exportVisibleBonusPredictionsCsv() {
 // 横に長い表のための横スクロールバー（表の上と、画面の下にくっつくもの）。表と動きを合わせる
 function setupTableScrollMirrors() {
   if (tableScrollMirrors.length > 0) return;
-  tableScrollMirrors = ["top", "bottom"].map((position) => {
+  // 「◀ 左右に動かすと表が横に動きます ▶」の案内つきの枠に入れて、スクロールバーだと分かるようにする
+  tableScrollMirrors =["top", "bottom"].map((position) => {
+    const holder = document.createElement("div");
+    const left = document.createElement("span");
+    const right = document.createElement("span");
+    const caption = document.createElement("span");
     const mirror = document.createElement("div");
     const inner = document.createElement("div");
-    mirror.className = `table-scroll-mirror ${position}`;
+    holder.className = `table-scroll-holder ${position}`;
+    left.className = "table-scroll-arrow";
+    right.className = "table-scroll-arrow";
+    left.textContent = "◀";
+    right.textContent = "▶";
+    caption.className = "table-scroll-caption";
+    caption.textContent = "左右に動かすと表が横に動きます";
+    mirror.className = "table-scroll-mirror";
     mirror.title = "左右に動かすと表が横に動きます";
     mirror.append(inner);
-    if (position === "top") comparisonTableWrap.before(mirror);
-    else comparisonTableWrap.after(mirror);
+    // 矢印を押しても横に動く
+    left.addEventListener("click", () => { comparisonTableWrap.scrollLeft -= 400; });
+    right.addEventListener("click", () => { comparisonTableWrap.scrollLeft += 400; });
+    holder.append(caption, left, mirror, right);
+    if (position === "top") comparisonTableWrap.before(holder);
+    else comparisonTableWrap.after(holder);
     return mirror;
   });
   let syncing = false;
@@ -3195,7 +3218,7 @@ function updateTableScrollMirrors() {
   const overflowing = !comparisonTableWrap.hidden
     && comparisonTableWrap.scrollWidth > comparisonTableWrap.clientWidth + 2;
   for (const mirror of tableScrollMirrors) {
-    mirror.hidden = !overflowing;
+    mirror.parentElement.hidden = !overflowing;
     mirror.firstElementChild.style.width = `${comparisonTableWrap.scrollWidth}px`;
     mirror.scrollLeft = comparisonTableWrap.scrollLeft;
   }
