@@ -418,11 +418,26 @@ document.head.append(Object.assign(document.createElement("style"), {
     .comparison-table.compact-columns { min-width: 0; }
     .comparison-table.compact-columns > thead > tr > th:nth-child(3),
     .comparison-table.compact-columns > tbody > tr > td:nth-child(3) { position: static; width: auto; box-shadow: none; }
-    .comparison-table.compact-columns .bonus-match-cell { display: flex; flex-wrap: wrap; gap: 8px; min-width: 320px; }
-    .comparison-table.compact-columns .bonus-match-cell .skill-match-item {
+    .comparison-table.compact-columns .bonus-match-cell { min-width: 320px; }
+    .comparison-table.compact-columns .match-items { display: flex; flex-wrap: wrap; gap: 8px; }
+    .comparison-table.compact-columns .match-items .skill-match-item {
       margin: 0; padding: 8px 10px; border: 1px solid #5a5236; border-radius: 8px; background: rgb(0 0 0 / 22%);
     }
-    .comparison-table.compact-columns .bonus-match-cell .comparison-bonus-set { grid-template-columns: repeat(5, auto); }
+    .comparison-table.compact-columns .match-items .comparison-bonus-set { grid-template-columns: repeat(5, auto); }
+    /* 全武器の列を並べた表：一致欄は2武器で1段、武器の間は白い破線 */
+    .comparison-table:not(.compact-columns) { --match-column-width: 480px; }
+    .comparison-table:not(.compact-columns) .match-items { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .comparison-table:not(.compact-columns) .match-items .skill-match-item {
+      margin: 0; padding: 6px 8px; border-bottom: 2px dashed rgb(255 255 255 / 55%);
+    }
+    .comparison-table:not(.compact-columns) .match-items .skill-match-item:nth-child(odd) { border-right: 2px dashed rgb(255 255 255 / 55%); }
+    .comparison-table:not(.compact-columns) .match-items .comparison-bonus-set { grid-template-columns: repeat(5, auto); justify-content: start; }
+    .comparison-table:not(.compact-columns) .match-items .skill-match-name { white-space: normal; line-height: 1.4; }
+    /* 武器の列：見出しとボーナスを縦の白線で区切り、ボーナスは上にそろえる */
+    .comparison-table:not(.compact-columns) th.reset-column-header,
+    .comparison-table:not(.compact-columns) th.owned-column-header,
+    .comparison-table:not(.compact-columns) td.comparison-result-cell { border-left: 2px solid rgb(240 240 240 / 55%); }
+    .comparison-table td.comparison-result-cell { vertical-align: top; }
     .match-adopt-button { display: inline-block; width: auto; margin-top: 4px; padding: 4px 10px; font-size: 0.7rem; }
     .bonus-wish-next-wish { color: #a9a690; font-size: 0.74rem; }
     .bonus-wish-next-result { font-weight: 800; color: #cfeec0; }
@@ -3273,6 +3288,10 @@ function createComparisonRow(index) {
   // 希望ボーナスに一致した武器を左側の「一致」列にまとめる
   const matchCell = document.createElement("td");
   matchCell.className = "bonus-match-cell";
+  // 並べ方（2武器で1段など）を変えやすいよう、一致した武器は入れ物に入れる
+  const matchItems = document.createElement("div");
+  matchItems.className = "match-items";
+  matchCell.append(matchItems);
   row.append(matchCell);
 
   const showAll = !!showAllComparisonColumns?.checked;
@@ -3292,7 +3311,7 @@ function createComparisonRow(index) {
         : createAdoptAsOwnedButton(target, target.rolls[index], index + 1);
       matchButton.classList.add("match-adopt-button");
       item.append(name, createCompactBonusSet(target, target.rolls[index], true), matchButton);
-      matchCell.append(item);
+      matchItems.append(item);
     }
     if (!showAll) continue;
     if (target.kind === "owned") {
@@ -3306,11 +3325,11 @@ function createComparisonRow(index) {
     row.append(cell);
   }
 
-  if (matchCell.childElementCount === 0) {
+  if (matchItems.childElementCount === 0) {
     const none = document.createElement("span");
     none.className = "skill-match-none";
     none.textContent = "—";
-    matchCell.append(none);
+    matchCell.replaceChildren(none);
   } else {
     row.classList.add("prediction-match", "bonus-wish-row-hit");
   }
