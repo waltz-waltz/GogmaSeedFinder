@@ -400,6 +400,29 @@ document.head.append(Object.assign(document.createElement("style"), {
       box-shadow: 0 0 14px rgb(255 212 77 / 70%); filter: brightness(1.25) saturate(1.3);
     }
     .bonus-tag.not-wish { opacity: 0.25; filter: grayscale(1); }
+    /* タブが6つになったので、広い画面では6列に（狭い画面は元の並び方のまま） */
+    @media (min-width: 900px) {
+      .app-tabs { grid-template-columns: repeat(var(--tab-count, 5), minmax(0, 1fr)); }
+    }
+    /* 手持ち武器：小見出し・スキルのカード */
+    .owned-form-subtitle { margin: 4px 0 0; color: #d6d3c5; font-size: 0.78rem; font-weight: 800; }
+    .owned-skill-picker { display: grid; gap: 12px; }
+    .owned-skill-options { max-height: none; }
+    /* スキル未来予測：所持済みの印と、狙う激化で所持済みのマスを薄く */
+    .skill-owned-badge {
+      display: inline-block; margin-top: 4px; padding: 2px 8px; border-radius: 6px;
+      background: #17302d; border: 1px solid #4f9a92; color: #bff3ec; font-size: 0.72rem; font-weight: 800;
+    }
+    td.skill-owned-cell .skill-result-pair { opacity: 0.35; filter: grayscale(0.8); }
+    .skill-adopt { position: relative; margin-top: 6px; }
+    .skill-adopt-menu {
+      position: absolute; z-index: 20; top: calc(100% + 4px); left: 0; display: grid; gap: 6px; min-width: 300px;
+      padding: 10px; border: 2px solid #e8c766; border-radius: 10px; background: #1b1c17; box-shadow: 0 10px 30px rgb(0 0 0 / 60%);
+    }
+    .skill-adopt-menu[hidden] { display: none; }
+    .skill-adopt-menu p { margin: 0 0 2px; color: #ffe39a; font-size: 0.78rem; font-weight: 800; }
+    .skill-adopt-choice { padding: 6px 10px; border: 1px solid #5a5236; border-radius: 6px; background: #26271f; color: #f2eddc; font-size: 0.78rem; text-align: left; cursor: pointer; }
+    .skill-adopt-choice:hover { border-color: #e8c766; background: #322f22; }
     /* 開け閉めできる欄：「▶ クリックで〜が開きます」の案内 */
     details.collapsible > summary { cursor: pointer; list-style: none; }
     details.collapsible > summary::-webkit-details-marker { display: none; }
@@ -760,6 +783,8 @@ const keepLayoutInputs = document.querySelector("#keep-layout-inputs");
 const keepLayoutSource = document.querySelector("#keep-layout-source");
 const keepLayoutError = document.querySelector("#keep-layout-error");
 const detailPredictionSection = document.querySelector(".detail-prediction-section");
+// 「06 手持ち武器」タブ（手持ち武器の登録・編集だけをするページ）。タブの一覧を集める前に足しておく
+const ownedTabContainer = createOwnedWeaponTab();
 const tabButtons = [...document.querySelectorAll("[data-tab]")];
 const tabViews = [...document.querySelectorAll("[data-tab-view]")];
 
@@ -822,6 +847,8 @@ let comparisonRowLimit = COMPARISON_PAGE_SIZE;
 let comparisonMoreBar = null;
 // 横に長い表のための追加の横スクロールバー（表の上・画面の下）
 let tableScrollMirrors = [];
+// スキル未来予測タブに出す手持ち武器の登録欄
+let skillOwnedContainer = null;
 // 開け閉めできる欄は最初は閉じておき、開いた欄は書き直しても開いたままにする
 const openDetailKeys = new Set();
 // 武器種ごとの希望ボーナス { [weaponType]: { counts: [攻撃, 会心, 属性, 斬れ味・装填] } }
@@ -1056,6 +1083,48 @@ skillPredictionCountInput.addEventListener("change", () => {
 skillFilterSeriesOptions.addEventListener("change", () => renderSkillPredictionTable());
 exportSkillCsvButton.addEventListener("click", () => exportVisibleSkillPredictionsCsv());
 findSkillPositionButton.addEventListener("click", () => void findSkillPosition());
+
+function createOwnedWeaponTab() {
+  const nav = document.querySelector(".app-tabs");
+  const lastView = [...document.querySelectorAll("[data-tab-view]")].pop();
+  if (!nav || !lastView) return null;
+  const button = document.createElement("button");
+  const number = document.createElement("span");
+  button.type = "button";
+  button.className = "tab-button";
+  button.dataset.tab = "owned";
+  button.setAttribute("aria-selected", "false");
+  number.textContent = String(nav.querySelectorAll("[data-tab]").length + 1).padStart(2, "0");
+  button.append(number, "手持ち武器");
+  nav.append(button);
+  nav.style.setProperty("--tab-count", String(nav.children.length));
+
+  const view = document.createElement("div");
+  view.className = "tab-view";
+  view.dataset.tabView = "owned";
+  const panel = document.createElement("section");
+  panel.className = "panel owned-tab-panel";
+  const heading = document.createElement("div");
+  heading.className = "section-heading";
+  const headingText = document.createElement("div");
+  const step = document.createElement("p");
+  const title = document.createElement("h2");
+  step.className = "step";
+  step.textContent = "MY WEAPONS";
+  title.textContent = "手持ち武器";
+  headingText.append(step, title);
+  heading.append(headingText);
+  const description = document.createElement("p");
+  description.className = "prediction-intro";
+  description.textContent = "持っている武器を1本ずつ登録します。ここで登録した武器は、「復元ボーナス未来予測」（同じ構成で再復元の予測・今より強くなる回の判定）と「スキル未来予測」（すでに持っている組み合わせの判定）の両方で使われます。どのタブで登録・編集しても、同じ内容です。";
+  const container = document.createElement("section");
+  container.className = "bonus-wish-settings owned-weapon-settings";
+  container.dataset.ownedWhere = "tab";
+  panel.append(heading, description, container);
+  view.append(panel);
+  lastView.after(view);
+  return container;
+}
 
 function readConfig() {
   const weaponType = readInteger("weapon-type", "武器種", 0, 13);
@@ -3590,6 +3659,13 @@ function setupComparisonFrames() {
   wrapInCollapsible(skillTargetList, "skill-registered-list", "登録済みの武器", "クリックで一覧が開きます");
   updateRegisteredListTitles();
 
+  // スキル未来予測タブにも手持ち武器の登録欄を出す（持っているスキルの登録用。最初は閉じる）
+  skillOwnedContainer = document.createElement("section");
+  skillOwnedContainer.className = "bonus-wish-settings owned-weapon-settings";
+  skillOwnedContainer.dataset.ownedWhere = "skill";
+  skillTargetList.closest("details")?.after(skillOwnedContainer);
+  wrapInCollapsible(skillOwnedContainer, "skill-owned", "手持ち武器（持っているスキルの登録・編集）", "クリックで開きます（06 手持ち武器タブと同じ内容です）");
+
   // 大枠B：「1条件を詳しく絞り込む」は別の調べ方。普段は閉じておく
   if (detailPredictionSection) {
     detailPredictionSection.classList.add("big-frame", "big-frame-detail");
@@ -3955,9 +4031,18 @@ function loadOwnedWeapons() {
           ? weapon.bonuses.map((bonusId) => validIds.has(bonusId) ? bonusId : null)
           : [null, null, null, null, null];
         const savedCategories = normalizeKeepCategories(weapon.categories);
+        const label = typeof weapon.label === "string" ? weapon.label.slice(0, 24) : "";
+        const validIndex = (value, list) =>
+          Number.isSafeInteger(value) && value >= 0 && value < list.length ? value : null;
+        // 激化タイプが保存されていない以前の登録は、名前の「【攻撃激化】」などから読み取る
+        const boostFromLabel = OWNED_BOOST_OPTIONS.find(([value]) => value && label.startsWith(`【${value}】`))?.[0] ?? "";
         return {
           id: typeof weapon.id === "string" && weapon.id ? weapon.id : createTargetId(),
-          label: typeof weapon.label === "string" ? weapon.label.slice(0, 24) : "",
+          label,
+          boost: OWNED_BOOST_OPTIONS.some(([value]) => value === weapon.boost) ? weapon.boost : boostFromLabel,
+          subtype: typeof weapon.subtype === "string" ? weapon.subtype.slice(0, 14) : "",
+          seriesIndex: validIndex(weapon.seriesIndex, SERIES_SKILLS),
+          groupIndex: validIndex(weapon.groupIndex, GROUP_SKILLS),
           weaponType: weapon.weaponType,
           attributeForce: weapon.attributeForce,
           bonuses,
@@ -3985,6 +4070,34 @@ function persistOwnedWeapons() {
 
 function ownedWeaponProblem(weapon) {
   return keepLayoutProblem({ ...weapon, keepCategories: weapon.categories });
+}
+
+// 復元ボーナスを1枠も入れていない（スキルだけ登録した）武器か
+function ownedBonusesEmpty(weapon) {
+  return normalizeKeepCategories(weapon.categories).every((category) => category === null);
+}
+
+// 例：「兇爪竜の力＋ヌシの魂」。未登録なら空文字
+function ownedSkillText(weapon) {
+  const parts = [
+    weapon.seriesIndex === null ? null : SERIES_SKILLS[weapon.seriesIndex],
+    weapon.groupIndex === null ? null : GROUP_SKILLS[weapon.groupIndex],
+  ].filter(Boolean);
+  return parts.join("＋");
+}
+
+// その武器種・属性で、同じシリーズ＋グループのスキルを持っている手持ち武器
+function ownedSkillHolders(target, roll) {
+  return ownedWeapons.filter((weapon) =>
+    weapon.weaponType === target.weaponType
+    && weapon.attributeForce === target.attributeForce
+    && weapon.seriesIndex === roll.seriesIndex
+    && weapon.groupIndex === roll.groupIndex);
+}
+
+// 狙う激化タイプ（空なら「どれでも」）の手持ち武器ですでに持っているか
+function ownedSkillAlreadyHeld(target, roll, wantedBoost) {
+  return ownedSkillHolders(target, roll).some((weapon) => !wantedBoost || weapon.boost === wantedBoost);
 }
 
 function ownedWeaponDefaultName(weapon) {
@@ -4038,6 +4151,10 @@ async function adoptResetAsOwned(target, bonusIds, completedRolls) {
       label: "",
       weaponType: target.weaponType,
       attributeForce: target.attributeForce,
+      boost: "",
+      subtype: "",
+      seriesIndex: null,
+      groupIndex: null,
       bonuses: [...bonusIds],
       categories,
       rule: "upgrade",
@@ -4126,14 +4243,80 @@ function createMinExSelect(value) {
   return select;
 }
 
-function renderOwnedWeaponSection() {
-  if (!ownedWeaponSection) return;
+// 手持ち武器の登録欄は「04 復元ボーナス」「05 スキル」「06 手持ち武器」の3か所に同じものを出す（データは共通）
+function ownedWeaponContainers() {
+  return [ownedWeaponSection, skillOwnedContainer, ownedTabContainer].filter(Boolean);
+}
+
+// 手持ち武器が変わったら、ほかの場所の登録欄と、両方の予測表を書き直す（編集中の欄は書き直さない）
+function onOwnedWeaponsChanged(editingContainer = null) {
+  persistOwnedWeapons();
+  renderOwnedWeaponSection(editingContainer);
+  void refreshComparisonPredictions();
+  if (skillPredictionRollSets.length > 0) renderSkillPredictionTable();
+}
+
+// シリーズスキル・グループスキルをカードで1つずつ選ぶ欄（「未登録」も選べる）
+function createOwnedSkillPicker(seriesIndex, groupIndex, onChange) {
+  const element = document.createElement("div");
+  element.className = "owned-skill-picker";
+  const values = { seriesIndex, groupIndex };
+  const name = `owned-skill-${createTargetId()}`;
+  const makeGroup = (title, kind, options, current, effectOf) => {
+    const fieldset = document.createElement("fieldset");
+    fieldset.className = "skill-filter-series";
+    const legend = document.createElement("legend");
+    legend.textContent = title;
+    const grid = document.createElement("div");
+    grid.className = "skill-filter-series-options owned-skill-options";
+    for (const [index, label] of [[-1, "未登録"], ...options]) {
+      const option = document.createElement("label");
+      const radio = document.createElement("input");
+      const text = document.createElement("span");
+      radio.type = "radio";
+      radio.name = `${name}-${kind}`;
+      radio.value = String(index);
+      radio.checked = (current ?? -1) === index;
+      text.textContent = label;
+      if (index >= 0) text.append(effectOf(label));
+      radio.addEventListener("change", () => {
+        values[kind] = index < 0 ? null : index;
+        onChange({ ...values });
+      });
+      option.append(radio, text);
+      grid.append(option);
+    }
+    fieldset.append(legend, grid);
+    return fieldset;
+  };
+  const groupEffect = (label) => {
+    const small = document.createElement("small");
+    small.className = "skill-effect";
+    const effect = GROUP_SKILL_EFFECTS[label];
+    if (effect) small.textContent = `発動スキル：${effect[0]}（3部位）`;
+    return small;
+  };
+  element.append(
+    makeGroup("グループスキル", "groupIndex", prioritizedSkillOptions(GROUP_SKILLS, PRIORITY_GROUP_SKILL_INDICES), groupIndex, groupEffect),
+    makeGroup("シリーズスキル", "seriesIndex", prioritizedSkillOptions(SERIES_SKILLS, PRIORITY_SERIES_SKILL_INDICES), seriesIndex, skillEffectSpan),
+  );
+  return { element, getValues: () => ({ ...values }) };
+}
+
+function renderOwnedWeaponSection(skipContainer = null) {
+  for (const container of ownedWeaponContainers()) {
+    if (container !== skipContainer) buildOwnedWeaponContent(container);
+  }
+}
+
+function buildOwnedWeaponContent(container) {
+  const where = container.dataset.ownedWhere ?? "bonus";
   const intro = document.createElement("div");
   intro.className = "skill-filter-intro";
   const title = document.createElement("strong");
-  title.textContent = "手持ち武器（同じ構成で再復元＝EX厳選）";
+  title.textContent = "手持ち武器";
   const description = document.createElement("p");
-  description.textContent = "実際に持っている武器と今のボーナスを登録すると、「同じ構成で再復元」したときの結果が表に並び、今より強くなる回が「一致」列に出ます（表の↑↓は今と比べて上がる／下がる枠）。ゲーム画面の1枠目〜5枠目の順番どおりに入れてください（順番が違うと予測がずれます）。";
+  description.textContent = "持っている武器を1本ずつ登録します。今のボーナス（1枠目〜5枠目をゲーム画面の順番どおりに）を入れると「同じ構成で再復元」の予測と今より強くなる回の判定に、スキルを入れるとスキル未来予測の「所持済み」の判定に使われます。どちらか片方だけでも登録できます。";
   intro.append(title, description);
 
   // 追加フォーム
@@ -4162,7 +4345,7 @@ function renderOwnedWeaponSection() {
   subtypeInput.placeholder = "例：貫通／通常";
   subtypeInput.value = typeof lastForm.subtype === "string" ? lastForm.subtype : "";
   const subtypeList = document.createElement("datalist");
-  subtypeList.id = `owned-subtype-list-${Date.now()}`;
+  subtypeList.id = `owned-subtype-list-${createTargetId()}`;
   subtypeInput.setAttribute("list", subtypeList.id);
   const nameInput = document.createElement("input");
   nameInput.type = "text";
@@ -4251,6 +4434,14 @@ function renderOwnedWeaponSection() {
   renderFormSlots();
   weaponSelectEl.addEventListener("change", renderFormSlots);
   attributeSelectEl.addEventListener("change", renderFormSlots);
+  const bonusTitle = document.createElement("p");
+  bonusTitle.className = "owned-form-subtitle";
+  bonusTitle.textContent = "今の復元ボーナス（任意・入れるなら5枠すべて）";
+  // スキル（任意）。長いので開け閉めできる欄に入れる
+  let formSkills = { seriesIndex: null, groupIndex: null };
+  const formSkillPicker = createOwnedSkillPicker(null, null, (values) => { formSkills = values; });
+  const formSkillBox = document.createElement("div");
+  formSkillBox.append(formSkillPicker.element);
   const addButton = document.createElement("button");
   addButton.type = "button";
   addButton.className = "secondary small-button";
@@ -4264,10 +4455,20 @@ function renderOwnedWeaponSection() {
       label: nameInput.value.trim(),
       weaponType: Number(weaponSelectEl.value),
       attributeForce: Number(attributeSelectEl.value),
+      boost: boostSelect.value,
+      subtype: subtypeInput.value.trim(),
+      seriesIndex: formSkills.seriesIndex,
+      groupIndex: formSkills.groupIndex,
     }, formBonuses, formRule.ruleSelect, formRule.exSelect);
-    const problem = ownedWeaponProblem(weapon);
+    // 復元ボーナスは空でもよい（スキルだけの登録）。入れるなら5枠そろっていること
+    const problem = ownedBonusesEmpty(weapon) ? null : ownedWeaponProblem(weapon);
     if (problem) {
       error.textContent = problem;
+      error.hidden = false;
+      return;
+    }
+    if (ownedBonusesEmpty(weapon) && weapon.seriesIndex === null && weapon.groupIndex === null) {
+      error.textContent = "今の復元ボーナスか、スキルのどちらかを入れてください。";
       error.hidden = false;
       return;
     }
@@ -4277,7 +4478,6 @@ function renderOwnedWeaponSection() {
       return;
     }
     ownedWeapons.push(weapon);
-    persistOwnedWeapons();
     // 選んだ武器種・属性・激化・種類を覚え、種類は武器種ごとの候補に足す
     rememberForm();
     const subtype = subtypeInput.value.trim();
@@ -4287,13 +4487,13 @@ function renderOwnedWeaponSection() {
       view.subtypeHistory[weapon.weaponType] = [...new Set([subtype, ...history])].slice(0, 12);
       persistBonusView(view);
     }
-    renderOwnedWeaponSection();
-    void refreshComparisonPredictions();
+    onOwnedWeaponsChanged();
   });
   const formRow = document.createElement("div");
   formRow.className = "owned-weapon-form-row";
   formRow.append(nameLabel, weaponLabel, attributeLabel, boostLabel, subtypeLabel);
-  form.append(formRow, nameHint, slots, formRule.wrap, addButton, error);
+  form.append(formRow, nameHint, bonusTitle, slots, formSkillBox, formRule.wrap, addButton, error);
+  wrapInCollapsible(formSkillBox, `owned-form-skill:${where}`, "スキル（任意）：シリーズスキル・グループスキル", "クリックでスキルの選択欄が開きます");
 
   // 登録済みの手持ち武器
   const cards = ownedWeapons.map((weapon) => {
@@ -4306,10 +4506,13 @@ function renderOwnedWeaponSection() {
     const state = document.createElement("span");
     state.className = "weapon-filter-state";
     const updateState = () => {
-      const currentProblem = ownedWeaponProblem(weapon);
-      state.textContent = currentProblem
-        ? `⚠ ${currentProblem}`
-        : `${t(optionName(WEAPON_TYPES, weapon.weaponType))}・${t(optionName(ATTRIBUTES, weapon.attributeForce))}｜${ownedLayoutText(weapon)}｜${ownedRuleText(weapon)}で一致`;
+      const bonusPart = ownedBonusesEmpty(weapon)
+        ? "復元ボーナス未入力"
+        : ownedWeaponProblem(weapon)
+          ? `⚠ ${ownedWeaponProblem(weapon)}`
+          : `${ownedLayoutText(weapon)}｜${ownedRuleText(weapon)}で一致`;
+      const skillPart = ownedSkillText(weapon) ? `スキル：${ownedSkillText(weapon)}` : "スキル未登録";
+      state.textContent = `${weaponAndAttributeText(weapon)}${weapon.boost ? `・${weapon.boost}` : ""}｜${bonusPart}｜${skillPart}`;
     };
     updateState();
     const removeButton = document.createElement("button");
@@ -4319,10 +4522,9 @@ function renderOwnedWeaponSection() {
     removeButton.setAttribute("aria-label", `${comparisonTargetName(weapon)}を削除`);
     removeButton.addEventListener("click", (event) => {
       event.preventDefault();
+      if (!window.confirm(`「${comparisonTargetName(weapon)}」を手持ち武器から削除しますか？`)) return;
       ownedWeapons = ownedWeapons.filter((candidate) => candidate.id !== weapon.id);
-      persistOwnedWeapons();
-      renderOwnedWeaponSection();
-      void refreshComparisonPredictions();
+      onOwnedWeaponsChanged();
     });
     // 並び替え（表の列や一覧の順番にも反映される）
     const moveButton = (text, label, offset) => {
@@ -4340,14 +4542,12 @@ function renderOwnedWeaponSection() {
         const to = from + offset;
         if (to < 0 || to >= ownedWeapons.length) return;
         [ownedWeapons[from], ownedWeapons[to]] = [ownedWeapons[to], ownedWeapons[from]];
-        persistOwnedWeapons();
-        renderOwnedWeaponSection();
-        void refreshComparisonPredictions();
+        onOwnedWeaponsChanged();
       });
       return button;
     };
     summary.append(name, state);
-    setupCollapsible(card, summary, `owned:${weapon.id}`, "クリックで今のボーナスと条件の設定欄が開きます");
+    setupCollapsible(card, summary, `owned:${where}:${weapon.id}`, "クリックで設定欄が開きます");
     const actions = document.createElement("span");
     actions.className = "owned-card-actions";
     actions.append(moveButton("↑", "上へ移動", -1), moveButton("↓", "下へ移動", 1), removeButton);
@@ -4364,17 +4564,28 @@ function renderOwnedWeaponSection() {
     renameInput.value = weapon.label;
     renameInput.placeholder = ownedWeaponDefaultName(weapon);
     renameLabel.append(renameText, renameInput);
+    const boostLabel = document.createElement("label");
+    const boostText = document.createElement("span");
+    const cardBoostSelect = document.createElement("select");
+    boostText.textContent = "激化タイプ";
+    populateSelect(cardBoostSelect, OWNED_BOOST_OPTIONS, weapon.boost);
+    boostLabel.append(boostText, cardBoostSelect);
     let cardBonuses = [...weapon.bonuses];
+    let cardSkills = { seriesIndex: weapon.seriesIndex, groupIndex: weapon.groupIndex };
     const cardRule = createOwnedRuleControls(weapon);
     const save = () => {
       const next = ownedWeaponFromInputs(weapon, cardBonuses, cardRule.ruleSelect, cardRule.exSelect);
       // 以前の登録で系統だけ分かっている枠は、ボーナスを選ぶまで系統を残す
       next.categories = next.categories.map((category, slotIndex) => category ?? weapon.categories[slotIndex]);
-      Object.assign(weapon, next, { label: renameInput.value.trim() });
+      Object.assign(weapon, next, {
+        label: renameInput.value.trim(),
+        boost: cardBoostSelect.value,
+        seriesIndex: cardSkills.seriesIndex,
+        groupIndex: cardSkills.groupIndex,
+      });
       name.textContent = comparisonTargetName(weapon);
       updateState();
-      persistOwnedWeapons();
-      void refreshComparisonPredictions();
+      onOwnedWeaponsChanged(container);
     };
     const cardPicker = createOwnedBonusPicker(weapon.weaponType, weapon.attributeForce, cardBonuses, (values) => {
       cardBonuses = values;
@@ -4384,10 +4595,22 @@ function renderOwnedWeaponSection() {
     const cardSlots = document.createElement("div");
     cardSlots.className = "owned-weapon-picker";
     cardSlots.append(cardPicker.element);
+    const cardBonusTitle = document.createElement("p");
+    cardBonusTitle.className = "owned-form-subtitle";
+    cardBonusTitle.textContent = "今の復元ボーナス";
+    const cardSkillPicker = createOwnedSkillPicker(weapon.seriesIndex, weapon.groupIndex, (values) => {
+      cardSkills = values;
+      save();
+    });
+    const cardSkillBox = document.createElement("div");
+    cardSkillBox.append(cardSkillPicker.element);
     renameInput.addEventListener("change", save);
+    cardBoostSelect.addEventListener("change", save);
     cardRule.wrap.addEventListener("change", save);
-    body.append(renameLabel, cardSlots, cardRule.wrap);
+    body.append(renameLabel, boostLabel, cardBonusTitle, cardSlots, cardSkillBox, cardRule.wrap);
     card.append(summary, body);
+    wrapInCollapsible(cardSkillBox, `owned-skill:${where}:${weapon.id}`,
+      `スキル：${ownedSkillText(weapon) || "未登録"}`, "クリックでスキルの選択欄が開きます");
     return card;
   });
 
@@ -4397,7 +4620,7 @@ function renderOwnedWeaponSection() {
     ? "まだ登録がありません。表の「採用して手持ちに登録」からも登録できます。"
     : `登録済み ${ownedWeapons.length}本（名前を押すと構成を直せます）`;
 
-  ownedWeaponSection.replaceChildren(intro, form, listTitle, ...cards);
+  container.replaceChildren(intro, form, listTitle, ...cards);
 }
 
 function updateComparisonStatus() {
@@ -4625,7 +4848,19 @@ function skillFilterForTarget(filter, target) {
     groupIndex: entry.groupIndex,
     operator: "and",
     seriesIndices: new Set(entry.seriesIndices),
+    boost: entry.boost ?? "",
   };
+}
+
+// 武器種ごとの「狙う激化タイプ」（空＝どれでも）。条件を指定していない武器種でも使う
+function wantedBoostFor(weaponType) {
+  return weaponSkillFilters[weaponType]?.boost ?? "";
+}
+
+// 条件に合い、しかも狙う激化タイプの手持ち武器でまだ持っていない組み合わせか
+function skillRollIsWanted(target, roll, filter) {
+  return skillRollMatchesFilter(roll, filter)
+    && !ownedSkillAlreadyHeld(target, roll, wantedBoostFor(target.weaponType));
 }
 
 function renderWeaponFilterSection() {
@@ -4665,12 +4900,16 @@ function renderWeaponFilterSection() {
     name.textContent = t(optionName(WEAPON_TYPES, weaponType));
     const state = document.createElement("span");
     state.className = "weapon-filter-state";
-    state.textContent = hasWeaponSkillFilter(weaponType)
-      ? [
-          entry.groupIndex >= 0 ? GROUP_SKILLS[entry.groupIndex] : null,
-          entry.seriesIndices.length > 0 ? entry.seriesIndices.map((i) => SERIES_SKILLS[i]).join(" / ") : null,
-        ].filter(Boolean).join(" ＋ ")
-      : "共通の条件を使用";
+    const stateText = (current) => {
+      const skills = hasWeaponSkillFilter(weaponType)
+        ? [
+            current.groupIndex >= 0 ? GROUP_SKILLS[current.groupIndex] : null,
+            current.seriesIndices.length > 0 ? current.seriesIndices.map((i) => SERIES_SKILLS[i]).join(" / ") : null,
+          ].filter(Boolean).join(" ＋ ")
+        : "共通の条件を使用";
+      return `${skills}｜狙う激化：${current.boost || "どれでも"}`;
+    };
+    state.textContent = stateText(entry);
     summary.append(name, state);
     setupCollapsible(row, summary, `skill-filter:${weaponType}`);
 
@@ -4713,33 +4952,38 @@ function renderWeaponFilterSection() {
     clearButton.className = "text-button";
     clearButton.textContent = "この武器種の条件をクリア";
 
+    // 狙う激化タイプ：この激化タイプの手持ち武器ですでに持っている組み合わせは「一致」から外す
+    const boostLabel = document.createElement("label");
+    boostLabel.textContent = "狙う激化タイプ（この激化の手持ち武器で持っている組み合わせは一致から外す）";
+    const boostSelect = document.createElement("select");
+    populateSelect(boostSelect, [["", "どれでも（どの激化で持っていても外す）"], ...OWNED_BOOST_OPTIONS.slice(1)], entry.boost ?? "");
+    boostLabel.append(boostSelect);
+
     const save = () => {
       const next = {
         groupIndex: Number(groupSelect.value),
         seriesIndices: [...seriesOptions.querySelectorAll("input:checked")].map((c) => Number(c.value)),
+        boost: boostSelect.value,
       };
-      if (next.groupIndex >= 0 || next.seriesIndices.length > 0) weaponSkillFilters[weaponType] = next;
+      if (next.groupIndex >= 0 || next.seriesIndices.length > 0 || next.boost) weaponSkillFilters[weaponType] = next;
       else delete weaponSkillFilters[weaponType];
       persistWeaponSkillFilters();
-      state.textContent = hasWeaponSkillFilter(weaponType)
-        ? [
-            next.groupIndex >= 0 ? GROUP_SKILLS[next.groupIndex] : null,
-            next.seriesIndices.length > 0 ? next.seriesIndices.map((i) => SERIES_SKILLS[i]).join(" / ") : null,
-          ].filter(Boolean).join(" ＋ ")
-        : "共通の条件を使用";
+      state.textContent = stateText(next);
       renderSkillPredictionTable();
     };
     groupSelect.addEventListener("change", save);
     seriesOptions.addEventListener("change", save);
+    boostSelect.addEventListener("change", save);
     clearButton.addEventListener("click", () => {
       groupSelect.value = "-1";
+      boostSelect.value = "";
       seriesOptions.querySelectorAll("input").forEach((c) => (c.checked = false));
       groupSelect.dispatchEvent(new Event("change"));
     });
 
     const body = document.createElement("div");
     body.className = "weapon-filter-body";
-    body.append(groupLabel, seriesFieldset, clearButton);
+    body.append(boostLabel, groupLabel, seriesFieldset, clearButton);
     row.append(summary, body);
     return row;
   });
@@ -4769,7 +5013,7 @@ function skillPredictionVisibility(filter = selectedSkillFilter()) {
   const count = skillPredictionRollSets[0].rolls.length;
   const allIndices = Array.from({ length: count }, (_, index) => index);
   const rowMatchesFilter = (index) => skillPredictionRollSets.some((target) =>
-    skillRollMatchesFilter(target.rolls[index], skillFilterForTarget(filter, target))
+    skillRollIsWanted(target, target.rolls[index], skillFilterForTarget(filter, target))
   );
   const matchingIndices = allIndices.filter(rowMatchesFilter);
   return {
@@ -4787,7 +5031,7 @@ function renderSkillPredictionTable() {
   const { count, matchingRowCount, visibleIndices } = skillPredictionVisibility(skillFilter);
   const conditionMatchCount = skillPredictionRollSets.reduce((total, target) => {
     const targetFilter = skillFilterForTarget(skillFilter, target);
-    return total + target.rolls.filter((roll) => skillRollMatchesFilter(roll, targetFilter)).length;
+    return total + target.rolls.filter((roll) => skillRollIsWanted(target, roll, targetFilter)).length;
   }, 0);
 
   const filterStatus = skillFilter.enabled
@@ -4891,8 +5135,13 @@ function createSkillPredictionRow(index, skillFilter, highlightEnabled) {
   for (const target of skillPredictionRollSets) {
     const roll = target.rolls[index];
     const cell = document.createElement("td");
-    const conditionMatch = highlightEnabled && skillRollMatchesFilter(roll, skillFilterForTarget(skillFilter, target));
+    // すでに持っている組み合わせ（狙う激化タイプの手持ち武器で）は一致から外し、薄くする
+    const heldForWanted = ownedSkillAlreadyHeld(target, roll, wantedBoostFor(target.weaponType));
+    const conditionMatch = highlightEnabled && skillRollIsWanted(target, roll, skillFilterForTarget(skillFilter, target));
     cell.append(createSkillResultPair(roll, conditionMatch));
+    const holdersBadge = createOwnedSkillBadge(target, roll);
+    if (holdersBadge) cell.append(holdersBadge);
+    if (heldForWanted) cell.classList.add("skill-owned-cell");
     row.append(cell);
 
     if (conditionMatch) {
@@ -4900,8 +5149,10 @@ function createSkillPredictionRow(index, skillFilter, highlightEnabled) {
       const name = document.createElement("div");
       item.className = "skill-match-item";
       name.className = "skill-match-name";
-      name.textContent = comparisonTargetName(target);
+      name.append(...createWeaponBadge(target));
       item.append(name, createSkillResultPair(roll, true));
+      if (holdersBadge) item.append(createOwnedSkillBadge(target, roll));
+      item.append(createSkillAdoptButton(target, roll, index + 1));
       matchCell.append(item);
     }
   }
@@ -4913,6 +5164,96 @@ function createSkillPredictionRow(index, skillFilter, highlightEnabled) {
     matchCell.append(none);
   }
   return row;
+}
+
+// 「所持：攻撃激化／属性激化」の印。その武器種・属性で同じ組み合わせを持っていなければ null
+function createOwnedSkillBadge(target, roll) {
+  const holders = ownedSkillHolders(target, roll);
+  if (holders.length === 0) return null;
+  const badge = document.createElement("div");
+  badge.className = "skill-owned-badge";
+  const boosts = [...new Set(holders.map((weapon) => weapon.boost || "激化不明"))];
+  badge.textContent = `所持：${boosts.join("／")}`;
+  badge.title = holders.map((weapon) => comparisonTargetName(weapon)).join("\n");
+  return badge;
+}
+
+// スキルの当たりを採用するボタン。押すと、どの手持ち武器に付けるか（または新しく登録するか）を選ぶ
+function createSkillAdoptButton(target, roll, completedRolls) {
+  const wrap = document.createElement("div");
+  wrap.className = "skill-adopt";
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "keep-transition-button match-adopt-button";
+  button.textContent = "採用して手持ちに反映";
+  button.title = "このスキルを採用してセーブしたものとしてスキルカウンターの0地点を進め、手持ち武器に反映します";
+  const menu = document.createElement("div");
+  menu.className = "skill-adopt-menu";
+  menu.hidden = true;
+  button.addEventListener("click", () => {
+    if (!menu.hidden) {
+      menu.hidden = true;
+      return;
+    }
+    const sameKind = ownedWeapons.filter((weapon) =>
+      weapon.weaponType === target.weaponType && weapon.attributeForce === target.attributeForce);
+    const choice = (text, onChoose) => {
+      const item = document.createElement("button");
+      item.type = "button";
+      item.className = "skill-adopt-choice";
+      item.textContent = text;
+      item.addEventListener("click", () => void onChoose());
+      return item;
+    };
+    const heading = document.createElement("p");
+    heading.textContent = "どの武器に付けますか？";
+    menu.replaceChildren(
+      heading,
+      ...sameKind.map((weapon) => choice(
+        `${comparisonTargetName(weapon)}${ownedSkillText(weapon) ? `（今：${ownedSkillText(weapon)}）` : ""}`,
+        () => adoptSkillToOwned(weapon, roll, completedRolls),
+      )),
+      ...OWNED_BOOST_OPTIONS.map(([boost]) => choice(
+        `＋ 新しい手持ち武器として登録（${weaponAndAttributeText(target)}${boost ? `・${boost}` : "・激化未設定"}）`,
+        () => adoptSkillAsNewOwned(target, boost, roll, completedRolls),
+      )),
+    );
+    menu.hidden = false;
+  });
+  wrap.append(button, menu);
+  return wrap;
+}
+
+async function adoptSkillToOwned(weapon, roll, completedRolls) {
+  weapon.seriesIndex = roll.seriesIndex;
+  weapon.groupIndex = roll.groupIndex;
+  onOwnedWeaponsChanged();
+  await adoptSkillPosition(completedRolls);
+}
+
+async function adoptSkillAsNewOwned(target, boost, roll, completedRolls) {
+  if (ownedWeapons.length >= MAX_OWNED_WEAPONS) {
+    showSkillTargetError(`手持ち武器は最大${MAX_OWNED_WEAPONS}本です。不要な武器を削除してください。`);
+    return;
+  }
+  const attribute = optionName(ATTRIBUTES, target.attributeForce).replace("属性", "");
+  const subtype = OWNED_SUBTYPE_BY_BOOST[target.weaponType]?.[boost] ?? "";
+  ownedWeapons.push({
+    id: createTargetId(),
+    label: boost ? `【${boost}】${subtype ? `${subtype} ` : ""}${attribute}` : "",
+    weaponType: target.weaponType,
+    attributeForce: target.attributeForce,
+    boost,
+    subtype,
+    seriesIndex: roll.seriesIndex,
+    groupIndex: roll.groupIndex,
+    bonuses: [null, null, null, null, null],
+    categories: [null, null, null, null, null],
+    rule: "upgrade",
+    minEx: 2,
+  });
+  onOwnedWeaponsChanged();
+  await adoptSkillPosition(completedRolls);
 }
 
 function createSkillResultPair(roll, conditionMatch) {
