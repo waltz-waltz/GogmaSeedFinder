@@ -308,15 +308,31 @@ document.head.append(Object.assign(document.createElement("style"), {
     .comparison-more-status { color: #b9b6a4; font-size: 0.78rem; }
     .comparison-more-bar .text-button { color: #ffffff; }
     /* 追加の横スクロールバー：表の上と、画面の下にくっつくもの */
-    .table-scroll-mirror { overflow-x: auto; overflow-y: hidden; height: 18px; scrollbar-color: #8e7a45 #20211c; }
+    /* 目立つように太く・金色に */
+    .table-scroll-mirror { overflow-x: auto; overflow-y: hidden; height: 22px; scrollbar-color: #e8c766 #2b2c25; scrollbar-width: auto; }
+    .table-scroll-mirror::-webkit-scrollbar { height: 18px; }
+    .table-scroll-mirror::-webkit-scrollbar-track { background: #2b2c25; }
+    .table-scroll-mirror::-webkit-scrollbar-thumb { background: #e8c766; border: 3px solid #2b2c25; border-radius: 999px; }
     .table-scroll-mirror[hidden] { display: none; }
     .table-scroll-mirror > div { height: 1px; }
-    .table-scroll-mirror.top { margin-top: 12px; }
-    .table-scroll-mirror.bottom { position: sticky; bottom: 0; z-index: 8; background: #151612; border-top: 1px solid #454233; }
-    /* 横に並べた表の各マスの小見出し（どの行でも武器が分かるように） */
-    .cell-target-label { margin-bottom: 4px; font-size: 0.7rem; font-weight: 700; color: #e8c766; white-space: nowrap; }
-    .cell-target-label.owned { color: #8fe0d6; }
-    .cell-target-label .weapon-badge { margin-right: 3px; padding: 0 5px; font-size: 0.68rem; }
+    .table-scroll-mirror.top { margin-top: 12px; border: 1px solid #8e7a45; border-radius: 8px; }
+    .table-scroll-mirror.bottom {
+      position: sticky; bottom: 0; z-index: 8; height: 26px;
+      background: #2b2c25; border: 2px solid #e8c766; border-radius: 8px 8px 0 0; box-shadow: 0 -6px 16px rgb(0 0 0 / 50%);
+    }
+    /* 何回先ごとに入れ直す見出しの行 */
+    .comparison-table > tbody > tr.repeat-header-row > th {
+      padding: 6px 7px; border-top: 2px solid #5a5236; background: #20221c; color: #c8c5b5;
+      font-size: 0.72rem; white-space: normal; overflow-wrap: anywhere;
+    }
+    .comparison-table > tbody > tr.repeat-header-row > th:nth-child(2) {
+      position: sticky; left: var(--offset-column-width); z-index: 2;
+    }
+    @media (min-width: 900px) {
+      .comparison-table > tbody > tr.repeat-header-row > th:nth-child(3) {
+        position: sticky; left: calc(var(--offset-column-width) + var(--state-column-width)); z-index: 2;
+      }
+    }
     .next-match-table .next-action .match-adopt-button { margin: 0; white-space: nowrap; }
     /* 次の一致：見出し付きの表 */
     .bonus-wish-summary { overflow-x: auto; }
@@ -3073,8 +3089,16 @@ function renderComparisonTable() {
   );
 
   const { count, minimumExCount, visibleIndices } = comparisonPredictionVisibility();
+  // 全武器の列を並べたときは、どの行でも武器が分かるよう「何回先」ごとに見出しの行を入れ直す
   comparisonRows.replaceChildren(
-    ...visibleIndices.slice(0, comparisonRowLimit).map((index) => createComparisonRow(index)),
+    ...visibleIndices.slice(0, comparisonRowLimit).flatMap((index, position) => {
+      const row = createComparisonRow(index);
+      if (!showAll || position === 0) return [row];
+      const repeatHeader = comparisonHeaderRow.cloneNode(true);
+      repeatHeader.removeAttribute("id");
+      repeatHeader.className = "repeat-header-row";
+      return [repeatHeader, row];
+    }),
   );
   renderComparisonMoreBar(visibleIndices.length);
   if (visibleIndices.length === 0) {
@@ -3255,11 +3279,7 @@ function createComparisonRow(index) {
       bonusSet.append(createAdoptAsOwnedButton(target, target.rolls[index], index + 1));
     }
     cell.classList.add("comparison-result-cell");
-    // 見出しは表の上にしかないので、どの行でも分かるよう各マスにも「弓・火（リセット）」を付ける
-    const cellLabel = document.createElement("div");
-    cellLabel.className = `cell-target-label ${target.kind === "owned" ? "owned" : "reset"}`;
-    cellLabel.append(...createWeaponBadge(target), target.kind === "owned" ? "（同構成）" : "（リセット）");
-    cell.append(cellLabel, bonusSet);
+    cell.append(bonusSet);
     row.append(cell);
   }
 
