@@ -327,6 +327,17 @@ document.head.append(Object.assign(document.createElement("style"), {
     /* 「何回先」の行と行の区切り：白い中太の線 */
     .comparison-table > tbody > tr:not(.repeat-header-row) > th,
     .comparison-table > tbody > tr:not(.repeat-header-row) > td { border-bottom: 3px solid rgb(240 240 240 / 75%); }
+    /* 見出しの行は低く：長い登録名は1行で「…」省略（マウスを乗せると全文）。手持ちの5枠表示も1行に */
+    .comparison-table thead th, .comparison-table > tbody > tr.repeat-header-row > th { padding-top: 6px; padding-bottom: 6px; vertical-align: bottom; }
+    .comparison-table th .target-label-text,
+    .comparison-table th .column-layout { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .comparison-table th .weapon-badge { white-space: nowrap; }
+    /* 左の「何回先」と「保存後の状態」を大きく太く */
+    .comparison-table > tbody > tr > th:first-child { font-size: 1rem; font-weight: 900; color: #ffe39a; }
+    .comparison-table .saved-state-cell > span { font-size: 0.8rem; font-weight: 800; color: #e6e1cf; }
+    .comparison-table .saved-state-cell > strong { font-size: 1.05rem; font-weight: 900; }
+    .comparison-table .saved-state-cell button { font-size: 0.82rem; font-weight: 900; padding-top: 6px; padding-bottom: 6px; }
+    .comparison-table .saved-state-cell .adopt-position-button { color: #d9f5c8; border-width: 2px; }
     /* 何回先ごとに入れ直す見出しの行 */
     .comparison-table > tbody > tr.repeat-header-row > th {
       padding: 6px 7px; border-top: 2px solid #5a5236; background: #20221c; color: #c8c5b5;
@@ -2919,7 +2930,12 @@ function createWeaponBadge(target) {
   const badge = document.createElement("span");
   badge.className = "weapon-badge";
   badge.textContent = weaponAndAttributeText(target);
-  return target.label ? [badge, target.label] : [badge];
+  if (!target.label) return [badge];
+  const label = document.createElement("span");
+  label.className = "target-label-text";
+  label.textContent = target.label;
+  label.title = target.label;
+  return [badge, label];
 }
 
 // 文章用：「片手剣・毒「【攻撃激化】毒」」
@@ -3100,12 +3116,8 @@ function renderComparisonTable() {
       kind.className = "column-kind";
       kind.textContent = target.kind === "owned" ? "手持ち・同じ構成" : "狙い・リセット";
       header.append(kind, ...createWeaponBadge(target));
-      if (target.kind === "owned") {
-        const layout = document.createElement("span");
-        layout.className = "column-layout";
-        layout.textContent = ownedLayoutText(target);
-        header.append(layout);
-      }
+      // 見出しを低く保つため、手持ち武器の今のボーナスはマウスを乗せたときだけ出す
+      if (target.kind === "owned") header.title = `今のボーナス：${ownedLayoutText(target)}`;
       return header;
     }),
   );
