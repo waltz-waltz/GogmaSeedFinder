@@ -404,6 +404,15 @@ document.head.append(Object.assign(document.createElement("style"), {
     @media (min-width: 900px) {
       .app-tabs { grid-template-columns: repeat(var(--tab-count, 5), minmax(0, 1fr)); }
     }
+    /* 手持ち武器の一覧：左端の武器種の札、並べ方の切り替え、武器種の見出し */
+    .owned-type-badge {
+      display: inline-block; min-width: 8.5em; padding: 3px 10px; border-radius: 6px; text-align: center;
+      background: #2f2b1c; border: 1px solid #e8c766; color: #ffe39a; font-size: 0.82rem; font-weight: 900;
+    }
+    .owned-sort-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 10px; color: #d6d3c5; font-size: 0.8rem; font-weight: 700; }
+    .owned-sort-button { padding: 6px 12px; border: 2px solid #3a3c31; border-radius: 8px; background: #151612; color: #c9c6b8; font-size: 0.78rem; font-weight: 800; cursor: pointer; }
+    .owned-sort-button.active { border-color: #4f9a92; background: rgb(79 154 146 / 16%); color: #bff3ec; }
+    .owned-group-heading { margin: 14px 0 6px; padding-bottom: 4px; border-bottom: 2px solid #4f9a92; color: #8fe0d6; font-size: 0.95rem; }
     /* 手持ち武器：小見出し・スキルのカード */
     .owned-form-subtitle { margin: 4px 0 0; color: #d6d3c5; font-size: 0.78rem; font-weight: 800; }
     .owned-skill-picker { display: grid; gap: 12px; }
@@ -422,6 +431,11 @@ document.head.append(Object.assign(document.createElement("style"), {
     .skill-adopt-menu p { margin: 0 0 2px; color: #ffe39a; font-size: 0.78rem; font-weight: 800; }
     .skill-adopt-choice { padding: 6px 10px; border: 1px solid #5a5236; border-radius: 6px; background: #26271f; color: #f2eddc; font-size: 0.78rem; text-align: left; cursor: pointer; }
     .skill-adopt-choice:hover { border-color: #e8c766; background: #322f22; }
+    .skill-adopt-choice { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; align-items: center; }
+    .skill-adopt-choice strong { color: #ffe39a; }
+    .skill-adopt-detail { grid-column: 2; color: #d6d3c5; font-size: 0.72rem; }
+    .skill-adopt-tag { grid-row: span 2; padding: 2px 8px; border-radius: 5px; background: #e8c766; color: #1a1708; font-size: 0.72rem; font-weight: 900; }
+    .skill-adopt-menu { min-width: 420px; }
     /* 開け閉めできる欄：「▶ クリックで〜が開きます」の案内 */
     details.collapsible > summary { cursor: pointer; list-style: none; }
     details.collapsible > summary::-webkit-details-marker { display: none; }
@@ -3575,6 +3589,8 @@ function loadBonusView() {
     ownedForm: saved.ownedForm && typeof saved.ownedForm === "object" ? saved.ownedForm : {},
     // 武器種ごとに使った「種類」（例：弓→貫通、ガンランス→通常）。名前の自動入力の候補にする
     subtypeHistory: saved.subtypeHistory && typeof saved.subtypeHistory === "object" ? saved.subtypeHistory : {},
+    // 手持ち武器の一覧の並べ方：manual＝登録した順（↑↓で並び替え）、type＝武器種ごと
+    ownedSort: saved.ownedSort === "type" ? "type" : "manual",
   };
 }
 function persistBonusView(view) {
@@ -4489,11 +4505,25 @@ function buildOwnedWeaponContent(container) {
   form.append(formRow, nameHint, bonusTitle, slots, formSkillBox, formRule.wrap, addButton, error);
   wrapInCollapsible(formSkillBox, `owned-form-skill:${where}`, "スキル（任意）：シリーズスキル・グループスキル", "クリックでスキルの選択欄が開きます");
 
-  // 登録済みの手持ち武器
-  const cards = ownedWeapons.map((weapon) => {
+  // 登録済みの手持ち武器（並べ方：登録した順／武器種ごと）
+  const sortMode = loadBonusView().ownedSort;
+  const attributeOrder = new Map(ATTRIBUTES.map(([value], index) => [value, index]));
+  const boostOrder = new Map(OWNED_BOOST_OPTIONS.map(([value], index) => [value, index]));
+  const displayWeapons = sortMode === "type"
+    ? [...ownedWeapons].sort((a, b) =>
+      a.weaponType - b.weaponType
+      || attributeOrder.get(a.attributeForce) - attributeOrder.get(b.attributeForce)
+      || (boostOrder.get(a.boost) ?? 0) - (boostOrder.get(b.boost) ?? 0))
+    : ownedWeapons;
+  const cards = displayWeapons.map((weapon) => {
     const card = document.createElement("details");
     card.className = "weapon-filter-row owned-weapon-card";
     const summary = document.createElement("summary");
+    // 左端に武器種の札（ぱっと見で弓・ガンランスなどが分かるように）
+    const typeBadge = document.createElement("span");
+    typeBadge.className = "owned-type-badge";
+    typeBadge.textContent = t(optionName(WEAPON_TYPES, weapon.weaponType));
+    summary.append(typeBadge);
     const name = document.createElement("span");
     name.className = "weapon-filter-name";
     name.textContent = comparisonTargetName(weapon);
@@ -4544,7 +4574,9 @@ function buildOwnedWeaponContent(container) {
     setupCollapsible(card, summary, `owned:${where}:${weapon.id}`, "クリックで設定欄が開きます");
     const actions = document.createElement("span");
     actions.className = "owned-card-actions";
-    actions.append(moveButton("↑", "上へ移動", -1), moveButton("↓", "下へ移動", 1), removeButton);
+    // ↑↓ は「登録した順」のときだけ（武器種ごとに並べているときは順番が自動で決まる）
+    if (sortMode === "manual") actions.append(moveButton("↑", "上へ移動", -1), moveButton("↓", "下へ移動", 1));
+    actions.append(removeButton);
     summary.append(actions);
 
     const body = document.createElement("div");
@@ -4614,7 +4646,43 @@ function buildOwnedWeaponContent(container) {
     ? "まだ登録がありません。表の「採用して手持ちに登録」からも登録できます。"
     : `登録済み ${ownedWeapons.length}本（名前を押すと構成を直せます）`;
 
-  container.replaceChildren(intro, form, listTitle, ...cards);
+  // 並べ方の切り替え（どの場所の一覧でも共通）
+  const sortBar = document.createElement("div");
+  sortBar.className = "owned-sort-bar";
+  const sortLabel = document.createElement("span");
+  sortLabel.textContent = "並べ方：";
+  sortBar.append(sortLabel, ...[
+    ["manual", "登録した順（↑↓で並び替え）"],
+    ["type", "武器種ごと"],
+  ].map(([value, text]) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `owned-sort-button${sortMode === value ? " active" : ""}`;
+    button.textContent = text;
+    button.addEventListener("click", () => {
+      const view = loadBonusView();
+      view.ownedSort = value;
+      persistBonusView(view);
+      renderOwnedWeaponSection();
+    });
+    return button;
+  }));
+
+  // 武器種ごとのときは、武器種の見出しを挟む
+  const listItems = [];
+  cards.forEach((card, index) => {
+    const weapon = displayWeapons[index];
+    if (sortMode === "type" && (index === 0 || displayWeapons[index - 1].weaponType !== weapon.weaponType)) {
+      const groupHeading = document.createElement("h4");
+      groupHeading.className = "owned-group-heading";
+      const count = displayWeapons.filter((other) => other.weaponType === weapon.weaponType).length;
+      groupHeading.textContent = `${t(optionName(WEAPON_TYPES, weapon.weaponType))}（${count}本）`;
+      listItems.push(groupHeading);
+    }
+    listItems.push(card);
+  });
+
+  container.replaceChildren(intro, form, listTitle, ...(ownedWeapons.length > 0 ? [sortBar] : []), ...listItems);
 }
 
 function updateComparisonStatus() {
@@ -5174,13 +5242,30 @@ function createSkillAdoptButton(target, roll, completedRolls) {
       return item;
     };
     const heading = document.createElement("p");
-    heading.textContent = "どの武器に付けますか？";
+    heading.textContent = sameKind.length > 0
+      ? "どの武器のスキルを上書きしますか？（同じ武器種・属性の手持ち武器）"
+      : "同じ武器種・属性の手持ち武器はありません。新しく登録します。";
+    // 同じ武器が2本以上あっても見分けられるよう、激化・今のスキル・今の復元ボーナスまで出す
+    const overwriteChoice = (weapon) => {
+      const item = choice("", () => adoptSkillToOwned(weapon, roll, completedRolls));
+      const tag = document.createElement("span");
+      tag.className = "skill-adopt-tag";
+      tag.textContent = "上書き";
+      const name = document.createElement("strong");
+      name.textContent = comparisonTargetName(weapon);
+      const detail = document.createElement("span");
+      detail.className = "skill-adopt-detail";
+      detail.textContent = [
+        `${weaponAndAttributeText(weapon)}・${weapon.boost || "激化未設定"}`,
+        `今のスキル：${ownedSkillText(weapon) || "未登録"}`,
+        ownedBonusesEmpty(weapon) ? "復元ボーナス未入力" : ownedLayoutText(weapon),
+      ].join("｜");
+      item.replaceChildren(tag, name, detail);
+      return item;
+    };
     menu.replaceChildren(
       heading,
-      ...sameKind.map((weapon) => choice(
-        `${comparisonTargetName(weapon)}${ownedSkillText(weapon) ? `（今：${ownedSkillText(weapon)}）` : ""}`,
-        () => adoptSkillToOwned(weapon, roll, completedRolls),
-      )),
+      ...sameKind.map(overwriteChoice),
       ...OWNED_BOOST_OPTIONS.map(([boost]) => choice(
         `＋ 新しい手持ち武器として登録（${weaponAndAttributeText(target)}${boost ? `・${boost}` : "・激化未設定"}）`,
         () => adoptSkillAsNewOwned(target, boost, roll, completedRolls),
