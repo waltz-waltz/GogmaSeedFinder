@@ -189,6 +189,38 @@ const PRIORITY_SERIES_SKILL_INDICES = [11, 6, 5, 18];
 const SKILL_COUNTER_GATE = 54;
 const MAX_REGISTERED_TARGETS = 140;
 
+// 元のサイトと見分けるため、タブの名前と見出しに「改良版」を付ける
+document.title = "Gogma Seed Finder 改良版";
+{
+  const heroTitle = document.querySelector(".hero h1");
+  if (heroTitle && !heroTitle.querySelector(".fork-badge")) {
+    heroTitle.append(Object.assign(document.createElement("span"), {
+      className: "fork-badge",
+      textContent: "改良版",
+    }));
+  }
+  const heroEyebrow = document.querySelector(".hero .eyebrow");
+  if (heroEyebrow) heroEyebrow.textContent = "Monster Hunter Wilds · 改良版（元のツール：apeshinzo78）";
+  document.head.append(Object.assign(document.createElement("style"), {
+    textContent: `
+      .fork-badge {
+        display: inline-block;
+        margin-left: 0.4em;
+        padding: 0.12em 0.5em;
+        border: 2px solid #d9b45a;
+        border-radius: 0.3em;
+        background: rgba(217, 180, 90, 0.18);
+        color: #f3d27a;
+        font-size: 0.38em;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        vertical-align: middle;
+        white-space: nowrap;
+      }
+    `,
+  }));
+}
+
 // 「一致」列の見た目
 document.head.append(Object.assign(document.createElement("style"), {
   textContent: `
