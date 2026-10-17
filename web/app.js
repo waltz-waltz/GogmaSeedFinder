@@ -422,12 +422,20 @@ document.head.append(Object.assign(document.createElement("style"), {
       display: inline-block; margin-top: 4px; padding: 2px 8px; border-radius: 6px;
       background: #17302d; border: 1px solid #4f9a92; color: #bff3ec; font-size: 0.74rem; font-weight: 800;
     }
-    .skill-adopt { position: relative; margin-top: 6px; }
-    .skill-adopt-menu {
-      position: absolute; z-index: 20; top: calc(100% + 4px); left: 0; display: grid; gap: 6px; min-width: 300px;
-      padding: 10px; border: 2px solid #e8c766; border-radius: 10px; background: #1b1c17; box-shadow: 0 10px 30px rgb(0 0 0 / 60%);
+    .skill-adopt { margin-top: 6px; }
+    /* 画面の真ん中に出す窓（いちばん手前に出す） */
+    .skill-adopt-overlay {
+      position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 16px;
+      background: rgb(0 0 0 / 60%);
     }
-    .skill-adopt-menu[hidden] { display: none; }
+    .skill-adopt-menu {
+      display: grid; gap: 8px; width: min(640px, 100%); max-height: 85vh; overflow-y: auto;
+      padding: 18px; border: 3px solid #e8c766; border-radius: 14px; background: #1b1c17; box-shadow: 0 16px 48px rgb(0 0 0 / 70%);
+    }
+    .skill-adopt-menu h3 { margin: 0; font-family: Georgia, "Yu Mincho", serif; font-size: 1.1rem; color: #f2eddc; }
+    .skill-adopt-summary { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .skill-adopt-note { margin: 0 0 4px; color: #b9b6a4; font-size: 0.76rem; line-height: 1.6; }
+    .skill-adopt-cancel { justify-self: end; margin-top: 4px; color: #ffffff; }
     .skill-adopt-menu p { margin: 0 0 2px; color: #ffe39a; font-size: 0.78rem; font-weight: 800; }
     .skill-adopt-choice { padding: 6px 10px; border: 1px solid #5a5236; border-radius: 6px; background: #26271f; color: #f2eddc; font-size: 0.78rem; text-align: left; cursor: pointer; }
     .skill-adopt-choice:hover { border-color: #e8c766; background: #322f22; }
@@ -435,7 +443,6 @@ document.head.append(Object.assign(document.createElement("style"), {
     .skill-adopt-choice strong { color: #ffe39a; }
     .skill-adopt-detail { grid-column: 2; color: #d6d3c5; font-size: 0.72rem; }
     .skill-adopt-tag { grid-row: span 2; padding: 2px 8px; border-radius: 5px; background: #e8c766; color: #1a1708; font-size: 0.72rem; font-weight: 900; }
-    .skill-adopt-menu { min-width: 420px; }
     /* 開け閉めできる欄：「▶ クリックで〜が開きます」の案内 */
     details.collapsible > summary { cursor: pointer; list-style: none; }
     details.collapsible > summary::-webkit-details-marker { display: none; }
@@ -5223,14 +5230,21 @@ function createSkillAdoptButton(target, roll, completedRolls) {
   button.className = "keep-transition-button match-adopt-button";
   button.textContent = "採用して手持ちに反映";
   button.title = "このスキルを採用してセーブしたものとしてスキルカウンターの0地点を進め、手持ち武器に反映します";
-  const menu = document.createElement("div");
-  menu.className = "skill-adopt-menu";
-  menu.hidden = true;
+  // 表の中に出すと下の行（左に固定した一致列）の後ろに隠れるので、画面の真ん中に出す窓にする
   button.addEventListener("click", () => {
-    if (!menu.hidden) {
-      menu.hidden = true;
-      return;
-    }
+    const overlay = document.createElement("div");
+    overlay.className = "skill-adopt-overlay";
+    const menu = document.createElement("div");
+    menu.className = "skill-adopt-menu";
+    menu.setAttribute("role", "dialog");
+    menu.setAttribute("aria-modal", "true");
+    const close = () => {
+      overlay.remove();
+      document.removeEventListener("keydown", onKey);
+    };
+    const onKey = (event) => { if (event.key === "Escape") close(); };
+    document.addEventListener("keydown", onKey);
+    overlay.addEventListener("click", (event) => { if (event.target === overlay) close(); });
     const sameKind = ownedWeapons.filter((weapon) =>
       weapon.weaponType === target.weaponType && weapon.attributeForce === target.attributeForce);
     const choice = (text, onChoose) => {
@@ -5238,9 +5252,25 @@ function createSkillAdoptButton(target, roll, completedRolls) {
       item.type = "button";
       item.className = "skill-adopt-choice";
       item.textContent = text;
-      item.addEventListener("click", () => void onChoose());
+      item.addEventListener("click", () => {
+        close();
+        void onChoose();
+      });
       return item;
     };
+    const title = document.createElement("h3");
+    title.textContent = `${completedRolls}回先のスキルを手持ち武器に反映`;
+    const summary = document.createElement("div");
+    summary.className = "skill-adopt-summary";
+    summary.append(...createWeaponBadge(target), createSkillResultPair(roll, true));
+    const note = document.createElement("p");
+    note.className = "skill-adopt-note";
+    note.textContent = "選ぶと、その武器のスキルを書き換え（または新しく登録し）、スキルカウンターの0地点もこの回まで進めます。";
+    const cancel = document.createElement("button");
+    cancel.type = "button";
+    cancel.className = "text-button skill-adopt-cancel";
+    cancel.textContent = "やめる";
+    cancel.addEventListener("click", close);
     const heading = document.createElement("p");
     heading.textContent = sameKind.length > 0
       ? "どの武器のスキルを上書きしますか？（同じ武器種・属性の手持ち武器）"
@@ -5264,16 +5294,22 @@ function createSkillAdoptButton(target, roll, completedRolls) {
       return item;
     };
     menu.replaceChildren(
+      title,
+      summary,
+      note,
       heading,
       ...sameKind.map(overwriteChoice),
       ...OWNED_BOOST_OPTIONS.map(([boost]) => choice(
         `＋ 新しい手持ち武器として登録（${weaponAndAttributeText(target)}${boost ? `・${boost}` : "・激化未設定"}）`,
         () => adoptSkillAsNewOwned(target, boost, roll, completedRolls),
       )),
+      cancel,
     );
-    menu.hidden = false;
+    overlay.append(menu);
+    document.body.append(overlay);
+    menu.querySelector(".skill-adopt-choice")?.focus();
   });
-  wrap.append(button, menu);
+  wrap.append(button);
   return wrap;
 }
 
