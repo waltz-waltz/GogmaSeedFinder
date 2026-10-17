@@ -436,6 +436,8 @@ document.head.append(Object.assign(document.createElement("style"), {
     .skill-adopt-summary { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
     .skill-adopt-note { margin: 0 0 4px; color: #b9b6a4; font-size: 0.76rem; line-height: 1.6; }
     .skill-adopt-cancel { justify-self: end; margin-top: 4px; color: #ffffff; }
+    .skill-adopt-heading { margin: 0; color: #ffe39a; font-size: 0.82rem; font-weight: 800; }
+    .skill-adopt-summary .comparison-bonus-set { grid-template-columns: repeat(5, auto); }
     .skill-adopt-menu p { margin: 0 0 2px; color: #ffe39a; font-size: 0.78rem; font-weight: 800; }
     .skill-adopt-choice { padding: 6px 10px; border: 1px solid #5a5236; border-radius: 6px; background: #26271f; color: #f2eddc; font-size: 0.78rem; text-align: left; cursor: pointer; }
     .skill-adopt-choice:hover { border-color: #e8c766; background: #322f22; }
@@ -4135,52 +4137,146 @@ function ownedLayoutText(weapon) {
     .join(" ");
 }
 
+// 採用するときの窓（画面の真ん中・いちばん手前）。押しただけでは何も変わらず、窓で選んだときに反映する。
+// choices: [{ tag?, name, detail?, onChoose }]。「やめる」・窓の外・Esc で閉じる
+function openAdoptDialog({ title, summary = [], note, heading, choices }) {
+  const overlay = document.createElement("div");
+  overlay.className = "skill-adopt-overlay";
+  const menu = document.createElement("div");
+  menu.className = "skill-adopt-menu";
+  menu.setAttribute("role", "dialog");
+  menu.setAttribute("aria-modal", "true");
+  const onKey = (event) => { if (event.key === "Escape") close(); };
+  const close = () => {
+    overlay.remove();
+    document.removeEventListener("keydown", onKey);
+  };
+  document.addEventListener("keydown", onKey);
+  overlay.addEventListener("click", (event) => { if (event.target === overlay) close(); });
+
+  const titleEl = document.createElement("h3");
+  titleEl.textContent = title;
+  const summaryEl = document.createElement("div");
+  summaryEl.className = "skill-adopt-summary";
+  summaryEl.append(...summary);
+  const noteEl = document.createElement("p");
+  noteEl.className = "skill-adopt-note";
+  noteEl.textContent = note;
+  const headingEl = document.createElement("p");
+  headingEl.className = "skill-adopt-heading";
+  headingEl.textContent = heading;
+  const buttons = choices.map(({ tag, name, detail, onChoose }) => {
+    const item = document.createElement("button");
+    item.type = "button";
+    item.className = "skill-adopt-choice";
+    if (tag) {
+      const tagEl = document.createElement("span");
+      tagEl.className = "skill-adopt-tag";
+      tagEl.textContent = tag;
+      item.append(tagEl);
+    }
+    const nameEl = document.createElement("strong");
+    nameEl.textContent = name;
+    item.append(nameEl);
+    if (detail) {
+      const detailEl = document.createElement("span");
+      detailEl.className = "skill-adopt-detail";
+      detailEl.textContent = detail;
+      item.append(detailEl);
+    }
+    item.addEventListener("click", () => {
+      close();
+      void onChoose();
+    });
+    return item;
+  });
+  const cancel = document.createElement("button");
+  cancel.type = "button";
+  cancel.className = "text-button skill-adopt-cancel";
+  cancel.textContent = "やめる";
+  cancel.addEventListener("click", close);
+  menu.append(titleEl, summaryEl, noteEl, headingEl, ...buttons, cancel);
+  overlay.append(menu);
+  document.body.append(overlay);
+  buttons[0]?.focus();
+}
+
+// 「弓・火・攻撃激化｜今のスキル：…｜攻EX 攻III …」（上書きする武器を見分けるための説明）
+function ownedWeaponDetailText(weapon) {
+  return [
+    `${weaponAndAttributeText(weapon)}・${weapon.boost || "激化未設定"}`,
+    `今のスキル：${ownedSkillText(weapon) || "未登録"}`,
+    `今のボーナス：${ownedBonusesEmpty(weapon) ? "未入力" : ownedLayoutText(weapon)}`,
+  ].join("｜");
+}
+
 function createAdoptAsOwnedButton(target, bonusIds, completedRolls) {
   const button = document.createElement("button");
   button.type = "button";
   button.className = "keep-transition-button";
   button.textContent = "採用して手持ちに登録";
-  button.title = "この結果を採用してセーブしたものとして0地点を進め、この構成を手持ち武器に登録します";
-  button.addEventListener("click", () => void adoptResetAsOwned(target, bonusIds, completedRolls));
+  button.title = "押すと、どの手持ち武器に反映するかを選ぶ窓が出ます";
+  button.addEventListener("click", () => {
+    const sameKind = ownedWeapons.filter((weapon) =>
+      weapon.weaponType === target.weaponType && weapon.attributeForce === target.attributeForce);
+    openAdoptDialog({
+      title: `${completedRolls}回先の復元ボーナスを手持ち武器に反映`,
+      summary: [...createWeaponBadge(target), createCompactBonusSet(target, bonusIds)],
+      note: "選ぶと、その武器の今の復元ボーナスを書き換え（または新しく登録し）、復元ボーナスカウンターの0地点もこの回まで進めます。",
+      heading: sameKind.length > 0
+        ? "どの武器の復元ボーナスを上書きしますか？（同じ武器種・属性の手持ち武器）"
+        : "同じ武器種・属性の手持ち武器はありません。新しく登録します。",
+      choices: [
+        ...sameKind.map((weapon) => ({
+          tag: "上書き",
+          name: comparisonTargetName(weapon),
+          detail: ownedWeaponDetailText(weapon),
+          onChoose: () => adoptResetToOwned(weapon, bonusIds, completedRolls),
+        })),
+        ...OWNED_BOOST_OPTIONS.map(([boost]) => ({
+          name: `＋ 新しい手持ち武器として登録（${weaponAndAttributeText(target)}・${boost || "激化未設定"}）`,
+          onChoose: () => adoptResetAsNewOwned(target, boost, bonusIds, completedRolls),
+        })),
+      ],
+    });
+  });
   return button;
 }
 
-// リセットの当たりを採用：手持ち武器に登録（同じ武器種・属性があれば上書きを確認）して、0地点を進める
-async function adoptResetAsOwned(target, bonusIds, completedRolls) {
+// リセットの当たりを採用：選んだ手持ち武器の復元ボーナスを上書きして、0地点を進める
+async function adoptResetToOwned(weapon, bonusIds, completedRolls) {
+  weapon.bonuses = [...bonusIds];
+  weapon.categories = bonusIds.map(bonusCategoryId);
+  onOwnedWeaponsChanged();
+  await adoptBonusPosition(completedRolls);
+  bonusStateMessage.textContent = `${completedRolls}回先の結果を採用して0地点を進め、「${comparisonTargetName(weapon)}」の復元ボーナスを ${ownedLayoutText(weapon)} に上書きしました。`;
+}
+
+// リセットの当たりを採用：激化タイプを選んで新しい手持ち武器として登録し、0地点を進める
+async function adoptResetAsNewOwned(target, boost, bonusIds, completedRolls) {
   hideComparisonError();
-  const categories = bonusIds.map(bonusCategoryId);
-  const sameKind = ownedWeapons.filter((weapon) =>
-    weapon.weaponType === target.weaponType && weapon.attributeForce === target.attributeForce);
-  let weapon = null;
-  if (sameKind.length > 0 && window.confirm(
-    `手持ちに「${comparisonTargetName(sameKind[0])}」があります。この武器の構成を上書きしますか？\n（キャンセルを押すと、新しい武器として追加します）`,
-  )) {
-    weapon = sameKind[0];
-    weapon.categories = categories;
-    weapon.bonuses = [...bonusIds];
-  } else {
-    if (ownedWeapons.length >= MAX_OWNED_WEAPONS) {
-      showComparisonError(`手持ち武器は最大${MAX_OWNED_WEAPONS}本です。不要な武器を削除してください。`);
-      return;
-    }
-    weapon = {
-      id: createTargetId(),
-      label: "",
-      weaponType: target.weaponType,
-      attributeForce: target.attributeForce,
-      boost: "",
-      subtype: "",
-      seriesIndex: null,
-      groupIndex: null,
-      bonuses: [...bonusIds],
-      categories,
-      rule: "upgrade",
-      minEx: 2,
-    };
-    ownedWeapons.push(weapon);
+  if (ownedWeapons.length >= MAX_OWNED_WEAPONS) {
+    showComparisonError(`手持ち武器は最大${MAX_OWNED_WEAPONS}本です。不要な武器を削除してください。`);
+    return;
   }
-  persistOwnedWeapons();
-  renderOwnedWeaponSection();
+  const attribute = optionName(ATTRIBUTES, target.attributeForce).replace("属性", "");
+  const subtype = OWNED_SUBTYPE_BY_BOOST[target.weaponType]?.[boost] ?? "";
+  const weapon = {
+    id: createTargetId(),
+    label: boost ? `【${boost}】${subtype ? `${subtype} ` : ""}${attribute}` : "",
+    weaponType: target.weaponType,
+    attributeForce: target.attributeForce,
+    boost,
+    subtype,
+    seriesIndex: null,
+    groupIndex: null,
+    bonuses: [...bonusIds],
+    categories: bonusIds.map(bonusCategoryId),
+    rule: "upgrade",
+    minEx: 2,
+  };
+  ownedWeapons.push(weapon);
+  onOwnedWeaponsChanged();
   await adoptBonusPosition(completedRolls);
   bonusStateMessage.textContent = `${completedRolls}回先の結果を採用して0地点を進め、「${comparisonTargetName(weapon)}」を手持ち武器（${ownedLayoutText(weapon)}）として登録しました。`;
 }
@@ -4190,8 +4286,26 @@ function createAdoptOwnedUpdateButton(target, bonusIds, completedRolls) {
   button.type = "button";
   button.className = "keep-transition-button owned-update-button";
   button.textContent = "採用して手持ちを更新";
-  button.title = "この結果を採用してセーブしたものとして0地点を進め、この手持ち武器の今のボーナスを書き換えます";
-  button.addEventListener("click", () => void adoptOwnedUpdate(target, bonusIds, completedRolls));
+  button.title = "押すと、反映してよいかを確かめる窓が出ます";
+  button.addEventListener("click", () => {
+    const weapon = ownedWeapons.find((candidate) => candidate.id === target.id);
+    if (!weapon) return;
+    const before = document.createElement("span");
+    before.className = "skill-adopt-detail";
+    before.textContent = `今：${ownedBonusesEmpty(weapon) ? "未入力" : ownedLayoutText(weapon)}　→　新しく：`;
+    openAdoptDialog({
+      title: `${completedRolls}回先の復元ボーナスで手持ち武器を更新`,
+      summary: [...createWeaponBadge(target), before, createCompactBonusSet(target, bonusIds)],
+      note: `「${comparisonTargetName(weapon)}」の今のボーナスを書き換えて、復元ボーナスカウンターの0地点を${completedRolls}回先まで進めます。`,
+      heading: "反映してよいですか？",
+      choices: [{
+        tag: "反映",
+        name: `${comparisonTargetName(weapon)} を更新する`,
+        detail: ownedWeaponDetailText(weapon),
+        onChoose: () => adoptOwnedUpdate(target, bonusIds, completedRolls),
+      }],
+    });
+  });
   return button;
 }
 
@@ -4201,8 +4315,7 @@ async function adoptOwnedUpdate(target, bonusIds, completedRolls) {
   if (!weapon) return;
   weapon.bonuses = [...bonusIds];
   weapon.categories = bonusIds.map(bonusCategoryId);
-  persistOwnedWeapons();
-  renderOwnedWeaponSection();
+  onOwnedWeaponsChanged();
   await adoptBonusPosition(completedRolls);
   bonusStateMessage.textContent = `${completedRolls}回先の結果を採用して0地点を進め、「${comparisonTargetName(weapon)}」を ${ownedLayoutText(weapon)} に更新しました。`;
 }
@@ -5232,82 +5345,29 @@ function createSkillAdoptButton(target, roll, completedRolls) {
   button.title = "このスキルを採用してセーブしたものとしてスキルカウンターの0地点を進め、手持ち武器に反映します";
   // 表の中に出すと下の行（左に固定した一致列）の後ろに隠れるので、画面の真ん中に出す窓にする
   button.addEventListener("click", () => {
-    const overlay = document.createElement("div");
-    overlay.className = "skill-adopt-overlay";
-    const menu = document.createElement("div");
-    menu.className = "skill-adopt-menu";
-    menu.setAttribute("role", "dialog");
-    menu.setAttribute("aria-modal", "true");
-    const close = () => {
-      overlay.remove();
-      document.removeEventListener("keydown", onKey);
-    };
-    const onKey = (event) => { if (event.key === "Escape") close(); };
-    document.addEventListener("keydown", onKey);
-    overlay.addEventListener("click", (event) => { if (event.target === overlay) close(); });
     const sameKind = ownedWeapons.filter((weapon) =>
       weapon.weaponType === target.weaponType && weapon.attributeForce === target.attributeForce);
-    const choice = (text, onChoose) => {
-      const item = document.createElement("button");
-      item.type = "button";
-      item.className = "skill-adopt-choice";
-      item.textContent = text;
-      item.addEventListener("click", () => {
-        close();
-        void onChoose();
-      });
-      return item;
-    };
-    const title = document.createElement("h3");
-    title.textContent = `${completedRolls}回先のスキルを手持ち武器に反映`;
-    const summary = document.createElement("div");
-    summary.className = "skill-adopt-summary";
-    summary.append(...createWeaponBadge(target), createSkillResultPair(roll, true));
-    const note = document.createElement("p");
-    note.className = "skill-adopt-note";
-    note.textContent = "選ぶと、その武器のスキルを書き換え（または新しく登録し）、スキルカウンターの0地点もこの回まで進めます。";
-    const cancel = document.createElement("button");
-    cancel.type = "button";
-    cancel.className = "text-button skill-adopt-cancel";
-    cancel.textContent = "やめる";
-    cancel.addEventListener("click", close);
-    const heading = document.createElement("p");
-    heading.textContent = sameKind.length > 0
-      ? "どの武器のスキルを上書きしますか？（同じ武器種・属性の手持ち武器）"
-      : "同じ武器種・属性の手持ち武器はありません。新しく登録します。";
-    // 同じ武器が2本以上あっても見分けられるよう、激化・今のスキル・今の復元ボーナスまで出す
-    const overwriteChoice = (weapon) => {
-      const item = choice("", () => adoptSkillToOwned(weapon, roll, completedRolls));
-      const tag = document.createElement("span");
-      tag.className = "skill-adopt-tag";
-      tag.textContent = "上書き";
-      const name = document.createElement("strong");
-      name.textContent = comparisonTargetName(weapon);
-      const detail = document.createElement("span");
-      detail.className = "skill-adopt-detail";
-      detail.textContent = [
-        `${weaponAndAttributeText(weapon)}・${weapon.boost || "激化未設定"}`,
-        `今のスキル：${ownedSkillText(weapon) || "未登録"}`,
-        ownedBonusesEmpty(weapon) ? "復元ボーナス未入力" : ownedLayoutText(weapon),
-      ].join("｜");
-      item.replaceChildren(tag, name, detail);
-      return item;
-    };
-    menu.replaceChildren(
-      title,
-      summary,
-      note,
-      heading,
-      ...sameKind.map(overwriteChoice),
-      ...OWNED_BOOST_OPTIONS.map(([boost]) => choice(
-        `＋ 新しい手持ち武器として登録（${weaponAndAttributeText(target)}${boost ? `・${boost}` : "・激化未設定"}）`,
-        () => adoptSkillAsNewOwned(target, boost, roll, completedRolls),
-      )),
-      cancel,
-    );
-    overlay.append(menu);
-    document.body.append(overlay);
-    menu.querySelector(".skill-adopt-choice")?.focus();
+    openAdoptDialog({
+      title: `${completedRolls}回先のスキルを手持ち武器に反映`,
+      summary: [...createWeaponBadge(target), createSkillResultPair(roll, true)],
+      note: "選ぶと、その武器のスキルを書き換え（または新しく登録し）、スキルカウンターの0地点もこの回まで進めます。",
+      heading: sameKind.length > 0
+        ? "どの武器のスキルを上書きしますか？（同じ武器種・属性の手持ち武器）"
+        : "同じ武器種・属性の手持ち武器はありません。新しく登録します。",
+      // 同じ武器が2本以上あっても見分けられるよう、激化・今のスキル・今の復元ボーナスまで出す
+      choices: [
+        ...sameKind.map((weapon) => ({
+          tag: "上書き",
+          name: comparisonTargetName(weapon),
+          detail: ownedWeaponDetailText(weapon),
+          onChoose: () => adoptSkillToOwned(weapon, roll, completedRolls),
+        })),
+        ...OWNED_BOOST_OPTIONS.map(([boost]) => ({
+          name: `＋ 新しい手持ち武器として登録（${weaponAndAttributeText(target)}・${boost || "激化未設定"}）`,
+          onChoose: () => adoptSkillAsNewOwned(target, boost, roll, completedRolls),
+        })),
+      ],
+    });
   });
   wrap.append(button);
   return wrap;
