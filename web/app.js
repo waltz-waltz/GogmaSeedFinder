@@ -430,8 +430,8 @@ document.head.append(Object.assign(document.createElement("style"), {
     .comparison-bonus-set .bonus-tag.wish-part { opacity: 1; font-weight: 900; color: #ffffff; text-shadow: 0 1px 2px rgb(0 0 0 / 90%); }
     /* 金の太い縁＋金の光。縁は少し離して付け、中の色（攻撃＝オレンジなど）は変えない */
     .comparison-bonus-set .bonus-tag.wish-part.ex {
-      outline: 3px solid #ffd44d; outline-offset: 2px;
-      box-shadow: 0 0 14px 2px rgb(255 212 77 / 70%);
+      outline: 3px solid #ffe066; outline-offset: 2px;
+      box-shadow: 0 0 0 5px rgb(255 214 70 / 35%), 0 0 18px 6px rgb(255 212 77 / 85%), 0 0 32px 8px rgb(255 200 40 / 45%);
     }
     .bonus-tag.not-wish { opacity: 0.25; filter: grayscale(1); }
     /* 5枠を1つずつ指定 */
@@ -698,6 +698,10 @@ document.head.append(Object.assign(document.createElement("style"), {
     .owned-bulk-rule > button { justify-self: start; }
     .bonus-tag .tier-up { margin-left: 2px; color: #7dff8a; font-weight: 900; text-shadow: 0 0 6px rgb(125 255 138 / 60%); }
     .bonus-tag .tier-down { margin-left: 2px; color: #ff7a6b; font-weight: 900; }
+    /* 塗りつぶしたEXの上では、矢印は文字と同じ色（オレンジ・白の上は黒、紫・灰の上は白）で太く大きく。上下は ↑↓ の形で分かる */
+    .bonus-tag.ex .tier-up, .bonus-tag.ex .tier-down {
+      margin-left: 3px; color: inherit; text-shadow: none; font-size: 1.15em; font-weight: 900; -webkit-text-stroke: 0.6px currentColor;
+    }
     .owned-update-button { border-color: #4f9a92; color: #bff3ec; }
     .owned-card-actions { display: inline-flex; gap: 6px; margin-left: auto; }
     .owned-remove-button, .owned-move-button { width: 26px; height: 26px; padding: 0; border: 0; border-radius: 50%; background: #30332b; color: #c9c6b8; font-weight: 900; cursor: pointer; }
@@ -3553,7 +3557,10 @@ function createCompactBonusSet(target, bonusIds, highlightWish = false) {
     const tag = document.createElement("span");
     tag.className = `bonus-tag compact ${bonusClassName(bonusId)}${EX_BONUS_IDS.has(bonusId) ? " ex" : ""}`;
     tag.textContent = compactGogmaBonusName(target.weaponType, bonusId);
-    if (slotUsed) {
+    if (highlightWish && target.kind === "owned" && EX_BONUS_IDS.has(bonusId)) {
+      // 手持ちの強化の一致でも、EXは金の縁で目立たせる
+      tag.classList.add("wish-part");
+    } else if (slotUsed) {
       tag.classList.add(slotUsed.has(slotIndex) ? "wish-part" : "not-wish");
     } else if (need) {
       const category = bonusCategoryId(bonusId);
