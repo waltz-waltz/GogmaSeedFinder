@@ -430,8 +430,8 @@ document.head.append(Object.assign(document.createElement("style"), {
     .comparison-bonus-set .bonus-tag.wish-part { opacity: 1; font-weight: 900; color: #ffffff; text-shadow: 0 1px 2px rgb(0 0 0 / 90%); }
     /* 金の太い縁＋金の光。縁は少し離して付け、中の色（攻撃＝オレンジなど）は変えない */
     .comparison-bonus-set .bonus-tag.wish-part.ex {
-      outline: 3px solid #ffe066; outline-offset: 2px;
-      box-shadow: 0 0 0 5px rgb(255 214 70 / 35%), 0 0 18px 6px rgb(255 212 77 / 85%), 0 0 32px 8px rgb(255 200 40 / 45%);
+      outline: 2px solid #ffd44d; outline-offset: 2px;
+      box-shadow: 0 0 10px 2px rgb(255 212 77 / 55%);
     }
     .bonus-tag.not-wish { opacity: 0.25; filter: grayscale(1); }
     /* 5枠を1つずつ指定 */
