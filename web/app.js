@@ -428,10 +428,8 @@ document.head.append(Object.assign(document.createElement("style"), {
     .bonus-wish-next-target { padding: 2px 8px; border: 1px solid #8a7a45; border-radius: 999px; color: #ffe39a; font-size: 0.72rem; font-weight: 800; }
     /* 希望に当てはまる枠：EXだけ金の太い縁＋光。EX以外は縁を付けず、白い文字を読みやすく。関係ない枠：灰色で薄く */
     .comparison-bonus-set .bonus-tag.wish-part { opacity: 1; font-weight: 900; color: #ffffff; text-shadow: 0 1px 2px rgb(0 0 0 / 90%); }
-    .bonus-tag.wish-part.ex {
-      outline: 3px solid #ffd44d; outline-offset: 1px;
-      box-shadow: 0 0 14px rgb(255 212 77 / 70%); filter: brightness(1.25) saturate(1.3);
-    }
+    /* 金の縁は少し離して付け、中の色（攻撃＝オレンジなど）は変えない */
+    .bonus-tag.wish-part.ex { outline: 3px solid #ffd44d; outline-offset: 2px; }
     .bonus-tag.not-wish { opacity: 0.25; filter: grayscale(1); }
     /* 5枠を1つずつ指定 */
     .bonus-wish-mode { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 0 0 12px; font-size: 0.82rem; font-weight: 700; }
@@ -577,11 +575,23 @@ document.head.append(Object.assign(document.createElement("style"), {
     }
     /* EXをもっと目立たせる：太い枠・強い光・白っぽい文字 */
     .bonus-tag.ex { border-width: 2px; font-weight: 900; text-shadow: 0 0 6px currentColor; }
-    .bonus-tag.attack.ex { border-color: #ff9a88; background: linear-gradient(135deg, rgb(205 70 52 / 70%), rgb(220 129 115 / 30%)); box-shadow: 0 0 0 1px rgb(255 154 136 / 45%), 0 0 16px rgb(230 85 65 / 55%); color: #fff3f0; }
-    .bonus-tag.affinity.ex { border-color: #ffd86a; background: linear-gradient(135deg, rgb(190 145 35 / 70%), rgb(224 189 89 / 30%)); box-shadow: 0 0 0 1px rgb(255 216 106 / 45%), 0 0 16px rgb(210 165 40 / 55%); color: #fffbe8; }
-    .bonus-tag.element.ex { border-color: #8fdcf5; background: linear-gradient(135deg, rgb(40 130 165 / 70%), rgb(105 183 208 / 30%)); box-shadow: 0 0 0 1px rgb(143 220 245 / 45%), 0 0 16px rgb(50 150 190 / 55%); color: #f0fbff; }
-    .bonus-tag.sharpness-ammo.ex { border-color: #c4b3ff; background: linear-gradient(135deg, rgb(110 85 180 / 70%), rgb(162 146 207 / 30%)); box-shadow: 0 0 0 1px rgb(196 179 255 / 45%), 0 0 16px rgb(120 95 200 / 55%); color: #f7f3ff; }
+    /* 色弱でも見分けやすい色分け（ユーザーは色弱）：
+       攻撃＝オレンジ、属性＝青、斬れ味・装填＝白（明るさで区別）、会心＝点線で地味に。
+       オレンジと青はどの型の色弱でも見分けやすい組み合わせ。色だけに頼らず、明るさ・枠の形も変える */
+    .bonus-tag.attack { border-color: rgb(230 159 0 / 75%); background: rgb(230 159 0 / 14%); color: #ffdca0; }
+    .bonus-tag.element { border-color: rgb(86 180 233 / 75%); background: rgb(0 114 178 / 20%); color: #d2ecff; }
+    .bonus-tag.sharpness-ammo { border-color: rgb(230 230 230 / 70%); background: rgb(255 255 255 / 9%); color: #f4f4f4; }
+    .bonus-tag.affinity { border-style: dashed; border-color: #6f6748; background: transparent; color: #bdb59a; }
+    .bonus-tag.attack.ex { border-color: #ffc04d; background: #e69f00; box-shadow: 0 0 0 1px rgb(255 192 77 / 50%), 0 0 16px rgb(230 159 0 / 60%); color: #1a1000; text-shadow: none; }
+    .bonus-tag.element.ex { border-color: #8fd0ff; background: #0072b2; box-shadow: 0 0 0 1px rgb(143 208 255 / 50%), 0 0 16px rgb(0 114 178 / 70%); color: #ffffff; text-shadow: none; }
+    .bonus-tag.sharpness-ammo.ex { border-color: #ffffff; background: #f2f2f2; box-shadow: 0 0 0 1px rgb(255 255 255 / 50%), 0 0 14px rgb(255 255 255 / 45%); color: #111111; text-shadow: none; }
     .bonus-tag:not(.ex) { opacity: 0.82; }
+    /* 会心EXは地味に：点線の枠・光らない・少し暗め（色が見分けにくくても、攻撃EXなどと形で区別できるように） */
+    .bonus-tag.affinity.ex,
+    .bonus-tag.affinity.ex.wish-part {
+      border-style: dashed; border-color: #b9a66a; background: rgb(120 100 40 / 25%);
+      box-shadow: none; outline: none; filter: none; text-shadow: none; color: #d8cfa8; opacity: 0.85;
+    }
     /* 「1条件を詳しく絞り込む」の表をスキル未来予測と同じ詰めた形に */
     .detail-compact-table { --state-column-width: 140px; min-width: 760px; }
     .detail-compact-table th, .detail-compact-table td { padding: 8px 7px; }
