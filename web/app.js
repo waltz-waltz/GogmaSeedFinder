@@ -529,12 +529,12 @@ document.head.append(Object.assign(document.createElement("style"), {
     .comparison-table:not(.compact-columns) .match-items .skill-match-item:nth-child(odd) { border-right: 2px dashed rgb(255 255 255 / 55%); }
     .comparison-table:not(.compact-columns) .match-items .comparison-bonus-set { grid-template-columns: repeat(5, auto); justify-content: start; }
     .comparison-table:not(.compact-columns) .match-items .skill-match-name { white-space: normal; line-height: 1.4; }
-    /* 一致欄を左右に分ける：左＝狙い（リセット・金）、右＝手持ちの強化（同じ構成・青緑） */
-    .match-split { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; align-items: start; }
+    /* 一致欄を上下に分ける：上＝狙い（リセット・金）、下＝手持ちの強化（同じ構成・青緑）。一致がない側は出さない */
+    .match-split { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+    .match-half.empty { display: none; }
     .match-half { min-width: 0; padding: 6px 8px 8px; border-radius: 10px; border: 2px solid transparent; }
     .match-half.reset { border-color: rgb(232 199 102 / 55%); background: rgb(232 199 102 / 6%); }
     .match-half.owned { border-color: rgb(110 205 195 / 55%); background: rgb(110 205 195 / 7%); }
-    .match-half.empty { border-style: dashed; opacity: 0.45; }
     .match-half-label { margin-bottom: 6px; font-size: 0.72rem; font-weight: 900; letter-spacing: 0.04em; }
     .match-half.reset .match-half-label { color: #f3d27a; }
     .match-half.owned .match-half-label { color: #8fe0d6; }
@@ -545,12 +545,8 @@ document.head.append(Object.assign(document.createElement("style"), {
     .match-kind-badge.reset { background: #e8c766; color: #1a1708; }
     .match-kind-badge.owned { background: #4fb8ad; color: #06201d; }
     .match-half.owned .skill-match-item { border-color: rgb(110 205 195 / 45%) !important; }
-    /* 全武器の列を並べた表：左右に分けたので、それぞれの中は1武器で1段 */
-    .comparison-table:not(.compact-columns) { --match-column-width: 600px; }
-    .comparison-table:not(.compact-columns) .match-half .match-items { grid-template-columns: minmax(0, 1fr); }
-    .comparison-table:not(.compact-columns) .match-half .match-items .skill-match-item:nth-child(odd) { border-right: 0; }
-    .comparison-table:not(.compact-columns) .match-half .match-items .skill-match-item:last-child { border-bottom: 0; }
-    .comparison-table.compact-columns .bonus-match-cell { min-width: 640px; }
+    /* 全武器の列を並べた表：上下に分けたので、それぞれの中は今までどおり2武器で1段 */
+    .comparison-table:not(.compact-columns) { --match-column-width: 520px; }
     /* 武器の列：見出しとボーナスを縦の白線で区切り、ボーナスは上にそろえる */
     .comparison-table:not(.compact-columns) th.reset-column-header,
     .comparison-table:not(.compact-columns) th.owned-column-header,
@@ -3464,7 +3460,7 @@ function createComparisonRow(index) {
   row.append(offsetCell, createSavedStateCell("bonus", index + 1, null, true));
 
   // 希望ボーナスに一致した武器を左側の「一致」列にまとめる。
-  // 見分けやすいよう、左半分＝狙い（リセット）、右半分＝手持ちの強化（同じ構成）に分ける
+  // 見分けやすいよう、上＝狙い（リセット）、下＝手持ちの強化（同じ構成）に分ける
   const matchCell = document.createElement("td");
   matchCell.className = "bonus-match-cell";
   const matchSplit = document.createElement("div");
@@ -3529,15 +3525,9 @@ function createComparisonRow(index) {
     none.textContent = "—";
     matchCell.replaceChildren(none);
   } else {
-    // 片方だけ一致したときも左右の位置はそろえ、空いた側は「—」
-    for (const { half, items } of [resetHalf, ownedHalf]) {
-      if (items.childElementCount > 0) continue;
-      half.classList.add("empty");
-      const none = document.createElement("span");
-      none.className = "skill-match-none";
-      none.textContent = "—";
-      items.append(none);
-    }
+    // 片方だけ一致したときは、空いた側を出さない
+    if (!hasReset) resetHalf.half.classList.add("empty");
+    if (!hasOwned) ownedHalf.half.classList.add("empty");
     row.classList.add("prediction-match", "bonus-wish-row-hit");
   }
   return row;
