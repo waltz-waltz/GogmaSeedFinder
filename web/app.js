@@ -688,6 +688,11 @@ document.head.append(Object.assign(document.createElement("style"), {
     .owned-rule-controls label { display: grid; gap: 4px; font-size: 0.76rem; font-weight: 700; }
     .owned-rule-controls label[hidden] { display: none; }
     .owned-rule-controls select { height: 38px; }
+    /* 一致の条件をまとめて設定 */
+    .owned-bulk-rule { display: grid; gap: 10px; padding: 4px 0 6px; }
+    .owned-bulk-rule > label { display: grid; gap: 4px; max-width: 420px; font-size: 0.76rem; font-weight: 700; }
+    .owned-bulk-rule > label select { height: 38px; }
+    .owned-bulk-rule > button { justify-self: start; }
     .bonus-tag .tier-up { margin-left: 2px; color: #7dff8a; font-weight: 900; text-shadow: 0 0 6px rgb(125 255 138 / 60%); }
     .bonus-tag .tier-down { margin-left: 2px; color: #ff7a6b; font-weight: 900; }
     .owned-update-button { border-color: #4f9a92; color: #bff3ec; }
@@ -900,7 +905,7 @@ let bonusPrediction = persistedAppState.bonusPrediction;
 bonusPrediction.mode = "reset";
 // 手持ち武器 [{ id, label, weaponType, attributeForce, categories: 1〜5枠目の系統, minEx }]
 const OWNED_WEAPONS_KEY = "gogma-seed-finder-owned-weapons-v1";
-const MAX_OWNED_WEAPONS = 60;
+const MAX_OWNED_WEAPONS = 140;
 // 手持ち武器を「一致」にする条件
 const OWNED_RULE_OPTIONS = [
   ["upgrade", "今より強くなる（どの枠も下がらず、1つ以上上がる）"],
@@ -5060,7 +5065,56 @@ function buildOwnedWeaponContent(container) {
     listItems.push(card);
   });
 
-  container.replaceChildren(intro, form, listTitle, ...(ownedWeapons.length > 0 ? [sortBar] : []), ...listItems);
+  container.replaceChildren(intro, form, listTitle);
+  if (ownedWeapons.length > 0) {
+    const bulkBox = createOwnedBulkRuleBox();
+    container.append(bulkBox, sortBar);
+    wrapInCollapsible(bulkBox, `owned-bulk:${where}`, "一致の条件をまとめて設定（全部／武器種ごと）", "クリックで設定欄が開きます");
+  }
+  container.append(...listItems);
+}
+
+// 手持ち武器の「一致にする条件」を、全部または武器種ごとにまとめて書き換える
+function createOwnedBulkRuleBox() {
+  const box = document.createElement("div");
+  box.className = "owned-bulk-rule";
+  const description = document.createElement("p");
+  description.className = "weapon-filter-empty";
+  description.textContent = "登録済みの手持ち武器の「一致にする条件」を、まとめて同じものにします。あとから1本ずつ直すこともできます。";
+  const targetLabel = document.createElement("label");
+  const targetText = document.createElement("span");
+  targetText.textContent = "対象";
+  const targetSelect = document.createElement("select");
+  const weaponTypes = [...new Set(ownedWeapons.map((weapon) => weapon.weaponType))].sort((a, b) => a - b);
+  const countOf = (weaponType) => ownedWeapons.filter((weapon) => weapon.weaponType === weaponType).length;
+  populateSelect(targetSelect, [
+    ["all", `すべての手持ち武器（${ownedWeapons.length}本）`],
+    ...weaponTypes.map((weaponType) =>
+      [String(weaponType), `${t(optionName(WEAPON_TYPES, weaponType))}だけ（${countOf(weaponType)}本）`]),
+  ], "all");
+  targetLabel.append(targetText, targetSelect);
+  const rule = createOwnedRuleControls({ rule: "upgrade", minEx: 2 });
+  const applyButton = document.createElement("button");
+  applyButton.type = "button";
+  applyButton.className = "secondary small-button";
+  applyButton.textContent = "まとめて設定する";
+  applyButton.addEventListener("click", () => {
+    const targets = targetSelect.value === "all"
+      ? ownedWeapons
+      : ownedWeapons.filter((weapon) => weapon.weaponType === Number(targetSelect.value));
+    const ruleName = rule.ruleSelect.value === "ex"
+      ? `EX ${rule.exSelect.value}個以上`
+      : optionName(OWNED_RULE_OPTIONS, rule.ruleSelect.value);
+    const targetName = targetSelect.selectedOptions[0]?.textContent ?? "";
+    if (!window.confirm(`${targetName}の一致にする条件を「${ruleName}」にします。よろしいですか？`)) return;
+    for (const weapon of targets) {
+      weapon.rule = rule.ruleSelect.value;
+      weapon.minEx = Number(rule.exSelect.value);
+    }
+    onOwnedWeaponsChanged();
+  });
+  box.append(description, targetLabel, rule.wrap, applyButton);
+  return box;
 }
 
 function updateComparisonStatus() {
