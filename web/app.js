@@ -696,6 +696,36 @@ document.head.append(Object.assign(document.createElement("style"), {
     .owned-bulk-rule > label { display: grid; gap: 4px; max-width: 420px; font-size: 0.76rem; font-weight: 700; }
     .owned-bulk-rule > label select { height: 38px; }
     .owned-bulk-rule > button { justify-self: start; }
+    /* 所持表（06 手持ち武器タブの一番上） */
+    .owned-matrix-panel { margin-bottom: 22px; }
+    .owned-matrix-legend { margin: 0 0 12px; color: #d8d3bf; font-size: 0.8rem; font-weight: 700; }
+    .owned-matrix-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 14px; align-items: start; }
+    .owned-matrix-card { padding: 8px; border: 2px solid #4f8f88; border-radius: 12px; background: rgb(0 0 0 / 18%); overflow-x: auto; }
+    .owned-matrix-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 0.8rem; }
+    .owned-matrix-table th, .owned-matrix-table td { padding: 4px 3px; border: 1px solid #4b4a3c; text-align: center; vertical-align: middle; }
+    .owned-matrix-table thead th { background: #2c2b22; color: #f3e6bd; font-size: 0.74rem; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .owned-matrix-table th.owned-matrix-corner { width: 6.5em; background: #3a3420; color: #ffe39a; font-size: 0.8rem; font-weight: 900; text-align: left; padding-left: 6px; white-space: normal; }
+    .owned-matrix-table tbody th { background: #22221b; color: #f2eddc; font-weight: 800; }
+    .owned-matrix-cell { height: 40px; }
+    .owned-matrix-cell.manual { cursor: pointer; }
+    .owned-matrix-cell.manual:hover, .owned-matrix-cell.manual:focus-visible { background: rgb(255 255 255 / 8%); outline: none; }
+    .owned-matrix-cell.auto { background: rgb(79 184 173 / 30%); color: #ffffff; }
+    .owned-matrix-symbol { display: block; font-size: 1rem; font-weight: 900; line-height: 1.1; }
+    .owned-matrix-partner { display: block; color: #e6fffb; font-size: 0.64rem; font-weight: 700; line-height: 1.2; overflow-wrap: anywhere; }
+    .owned-matrix-cell.mark-o { color: #ffd44d; font-size: 1.05rem; font-weight: 900; }
+    .owned-matrix-cell.mark-x { color: #9a9a9a; font-size: 1rem; font-weight: 900; }
+    .owned-matrix-editor { display: grid; gap: 10px; padding-top: 6px; }
+    .owned-matrix-edit-row { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid #4b4a3c; border-radius: 10px; background: rgb(0 0 0 / 16%); }
+    .owned-matrix-edit-fields { display: flex; flex-wrap: wrap; gap: 8px 12px; }
+    .owned-matrix-edit-fields label { display: grid; gap: 4px; min-width: 150px; font-size: 0.74rem; font-weight: 700; }
+    .owned-matrix-edit-fields input, .owned-matrix-edit-fields select { height: 36px; }
+    .owned-matrix-columns { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+    .owned-matrix-chip { display: inline-flex; gap: 4px; align-items: center; padding: 3px 6px; border: 1px solid #8a7a45; border-radius: 999px; background: #2b2a20; color: #ffe39a; font-size: 0.76rem; font-weight: 800; }
+    .owned-matrix-chip button { padding: 0 4px; border: 0; background: none; color: #f2eddc; font-size: 0.72rem; cursor: pointer; }
+    .owned-matrix-chip button:disabled { opacity: 0.25; cursor: default; }
+    .owned-matrix-columns select { width: auto; height: 32px; font-size: 0.76rem; }
+    .owned-matrix-edit-actions { display: flex; gap: 6px; }
+    .owned-matrix-edit-footer { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
     .bonus-tag .tier-up { margin-left: 2px; color: #7dff8a; font-weight: 900; text-shadow: 0 0 6px rgb(125 255 138 / 60%); }
     .bonus-tag .tier-down { margin-left: 2px; color: #ff7a6b; font-weight: 900; }
     /* 塗りつぶしたEXの上では、矢印は文字と同じ色（オレンジ・白の上は黒、紫・灰の上は白）で太く大きく。上下は ↑↓ の形で分かる */
@@ -934,6 +964,32 @@ const OWNED_SUBTYPE_BY_BOOST = {
 };
 let ownedWeapons = loadOwnedWeapons();
 let ownedWeaponSection = null;
+// 06 手持ち武器タブの一番上の所持表。かたまり（武器種＋激化）ごとに、行＝属性、列＝スキル。
+// 列のスキルは "g13"（グループスキルの番号）／"s5"（シリーズスキルの番号）。印は "かたまりID|属性|列" → "o"／"x"
+const OWNED_MATRIX_KEY = "gogma-seed-finder-owned-matrix-v1";
+const OWNED_MATRIX_ATTRIBUTES = [1, 2, 4, 3, 5, 7, 6, 8, 9]; // ユーザーのExcelと同じ順（火水雷氷龍・麻痺毒睡眠爆破）
+const OWNED_MATRIX_BOOST_OPTIONS = [["", "指定なし（全部）"], ["攻撃激化", "攻撃激化"], ["属性激化", "属性激化"], ["会心激化", "会心激化"]];
+// 初期の形：ユーザーのExcel（ワイルズ巨戟メモ用.xlsx のシート3）と同じ
+const OWNED_MATRIX_DEFAULT_BLOCKS = (() => {
+  const bowColumns = ["g13", "s11", "s5", "s18", "s17"]; // ヌシ魂・黒蝕竜・兇爪竜・巨戟龍・千刃竜
+  const gunlanceColumns = ["g13", "s10", "s5", "s18"]; // ヌシ魂・凍峰竜・兇爪竜・巨戟龍
+  const basicColumns = ["g13", "s11", "s5"]; // ヌシ魂・黒蝕竜・兇爪竜
+  const lightColumns = ["g13", "s11", "s5", "s18"];
+  const lanceColumns = ["g13", "s11", "s5", "s10"];
+  return [
+    ["弓【接撃】", 11, "攻撃激化", bowColumns],
+    ["弓【貫通】", 11, "属性激化", bowColumns],
+    ["ガンス【拡散】", 7, "属性激化", gunlanceColumns],
+    ["ガンス【通常】", 7, "攻撃激化", gunlanceColumns],
+    ["太刀", 3, "", basicColumns],
+    ["狩猟笛", 5, "", basicColumns],
+    ["ライト【攻撃】", 13, "攻撃激化", lightColumns],
+    ["ライト【属性】", 13, "属性激化", lightColumns],
+    ["ランス【攻撃】", 6, "攻撃激化", lanceColumns],
+    ["ランス【会心】", 6, "会心激化", lanceColumns],
+  ].map(([name, weaponType, boost, columns]) => ({ name, weaponType, boost, columns: [...columns] }));
+})();
+let ownedMatrix = loadOwnedMatrix();
 // 復元ボーナス未来予測の画面設定（登録欄の切り替え・表の表示）。このブラウザに保存
 const BONUS_VIEW_KEY = "gogma-seed-finder-bonus-view-v1";
 let showAllComparisonColumns = null;
@@ -1219,7 +1275,28 @@ function createOwnedWeaponTab() {
   container.className = "bonus-wish-settings owned-weapon-settings";
   container.dataset.ownedWhere = "tab";
   panel.append(heading, description, container);
-  view.append(panel);
+
+  // 一番上：所持表（ユーザーがExcelで作っていた管理表を再現。中身は renderOwnedMatrix で描く）
+  const matrixPanel = document.createElement("section");
+  matrixPanel.className = "panel owned-matrix-panel";
+  const matrixHeading = document.createElement("div");
+  matrixHeading.className = "section-heading";
+  const matrixHeadingText = document.createElement("div");
+  const matrixStep = document.createElement("p");
+  const matrixTitle = document.createElement("h2");
+  matrixStep.className = "step";
+  matrixStep.textContent = "MY LIST";
+  matrixTitle.textContent = "所持表";
+  matrixHeadingText.append(matrixStep, matrixTitle);
+  matrixHeading.append(matrixHeadingText);
+  const matrixDescription = document.createElement("p");
+  matrixDescription.className = "prediction-intro";
+  matrixDescription.textContent = "武器種・激化ごとに、属性（行）とスキル（列）の組み合わせを持っているかを一覧にします。下で登録した手持ち武器にそのスキルがあれば自動で「◎」（小さい字はもう片方のスキル）。登録していないものは、マスを押すと「○ → × → 空」と自分で印を付けられます。";
+  const matrixBody = document.createElement("div");
+  matrixBody.className = "owned-matrix-body";
+  matrixPanel.append(matrixHeading, matrixDescription, matrixBody);
+
+  view.append(matrixPanel, panel);
   lastView.after(view);
   return container;
 }
@@ -4704,6 +4781,8 @@ function renderOwnedWeaponSection(skipContainer = null) {
   for (const container of ownedWeaponContainers()) {
     if (container !== skipContainer) buildOwnedWeaponContent(container);
   }
+  // 手持ち武器が変わったら、所持表の◎も書き直す
+  renderOwnedMatrix();
 }
 
 function buildOwnedWeaponContent(container) {
@@ -5076,6 +5155,325 @@ function buildOwnedWeaponContent(container) {
     wrapInCollapsible(bulkBox, `owned-bulk:${where}`, "一致の条件をまとめて設定（全部／武器種ごと）", "クリックで設定欄が開きます");
   }
   container.append(...listItems);
+}
+
+// ===== 所持表（06 手持ち武器タブの一番上） =====
+function normalizeMatrixBlock(block) {
+  const weaponType = Math.trunc(Number(block?.weaponType));
+  return {
+    id: typeof block?.id === "string" && block.id ? block.id : createTargetId(),
+    name: typeof block?.name === "string" ? block.name.slice(0, 24) : "",
+    weaponType: WEAPON_TYPES.some(([value]) => value === weaponType) ? weaponType : 0,
+    boost: OWNED_MATRIX_BOOST_OPTIONS.some(([value]) => value === block?.boost) ? block.boost : "",
+    columns: Array.isArray(block?.columns)
+      ? [...new Set(block.columns.filter((key) => typeof key === "string" && matrixSkillName(key) !== null))]
+      : [],
+  };
+}
+
+function loadOwnedMatrix() {
+  let saved = null;
+  try {
+    saved = JSON.parse(localStorage.getItem(OWNED_MATRIX_KEY) ?? "null");
+  } catch {
+    saved = null;
+  }
+  const blocks = Array.isArray(saved?.blocks) ? saved.blocks.map(normalizeMatrixBlock) : null;
+  const marks = saved?.marks && typeof saved.marks === "object" ? saved.marks : {};
+  return {
+    blocks: blocks ?? OWNED_MATRIX_DEFAULT_BLOCKS.map(normalizeMatrixBlock),
+    marks: Object.fromEntries(Object.entries(marks).filter(([, value]) => value === "o" || value === "x")),
+  };
+}
+
+function persistOwnedMatrix() {
+  try {
+    localStorage.setItem(OWNED_MATRIX_KEY, JSON.stringify(ownedMatrix));
+  } catch {
+    // The app remains usable when storage is unavailable.
+  }
+}
+
+// "g13" → ヌシの魂、"s5" → 兇爪竜の力。short は表の見出し用の短い名前（ヌシ魂・兇爪竜）
+function matrixSkillName(key, short = false) {
+  const match = /^([gs])(\d+)$/.exec(key);
+  if (!match) return null;
+  const name = (match[1] === "g" ? GROUP_SKILLS : SERIES_SKILLS)[Number(match[2])];
+  if (!name) return null;
+  if (!short) return name;
+  return match[1] === "g" ? name.replace("の", "") : name.split("の")[0];
+}
+
+function weaponHasMatrixSkill(weapon, key) {
+  const index = Number(key.slice(1));
+  return key[0] === "g" ? weapon.groupIndex === index : weapon.seriesIndex === index;
+}
+
+function matrixBlockTitle(block) {
+  if (block.name.trim()) return block.name.trim();
+  const weaponName = optionName(WEAPON_TYPES, block.weaponType);
+  return block.boost ? `${weaponName}【${block.boost}】` : weaponName;
+}
+
+// そのマスに当てはまる手持ち武器（武器種・激化・属性・スキルが同じ）
+function matrixOwnedWeapons(block, attribute, key) {
+  return ownedWeapons.filter((weapon) =>
+    weapon.weaponType === block.weaponType
+    && (!block.boost || weapon.boost === block.boost)
+    && weapon.attributeForce === attribute
+    && weaponHasMatrixSkill(weapon, key));
+}
+
+function renderOwnedMatrix() {
+  const body = document.querySelector(".owned-matrix-body");
+  if (!body) return;
+
+  const legend = document.createElement("p");
+  legend.className = "owned-matrix-legend";
+  legend.textContent = "◎＝手持ち武器に登録あり（自動）　○＝自分で付けた印　×＝自分で付けた印（いらない・あきらめた など）";
+
+  const grid = document.createElement("div");
+  grid.className = "owned-matrix-grid";
+  for (const block of ownedMatrix.blocks) {
+    const card = document.createElement("div");
+    card.className = "owned-matrix-card";
+    const table = document.createElement("table");
+    table.className = "owned-matrix-table";
+    const head = document.createElement("tr");
+    const corner = document.createElement("th");
+    corner.className = "owned-matrix-corner";
+    corner.textContent = matrixBlockTitle(block);
+    head.append(corner);
+    for (const key of block.columns) {
+      const th = document.createElement("th");
+      th.textContent = matrixSkillName(key, true);
+      th.title = matrixSkillName(key);
+      head.append(th);
+    }
+    const thead = document.createElement("thead");
+    thead.append(head);
+    const tbody = document.createElement("tbody");
+    for (const attribute of OWNED_MATRIX_ATTRIBUTES) {
+      const row = document.createElement("tr");
+      const rowHead = document.createElement("th");
+      rowHead.textContent = optionName(ATTRIBUTES, attribute).replace("属性", "");
+      row.append(rowHead);
+      for (const key of block.columns) {
+        row.append(createOwnedMatrixCell(block, attribute, key));
+      }
+      tbody.append(row);
+    }
+    table.append(thead, tbody);
+    if (block.columns.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "weapon-filter-empty";
+      empty.textContent = "列のスキルがありません。下の「表の形を編集」で追加してください。";
+      card.append(table, empty);
+    } else {
+      card.append(table);
+    }
+    grid.append(card);
+  }
+
+  const editor = createOwnedMatrixEditor();
+  body.replaceChildren(legend, grid, editor);
+  wrapInCollapsible(editor, "owned-matrix-editor", "表の形を編集（かたまり・列のスキルを足す／消す）", "クリックで編集欄が開きます");
+}
+
+function createOwnedMatrixCell(block, attribute, key) {
+  const cell = document.createElement("td");
+  const owned = matrixOwnedWeapons(block, attribute, key);
+  const markKey = `${block.id}|${attribute}|${key}`;
+  if (owned.length > 0) {
+    // 手持ち武器から自動。小さい字でもう片方のスキル（グループの列ならシリーズ、シリーズの列ならグループ）
+    cell.className = "owned-matrix-cell auto";
+    const symbol = document.createElement("span");
+    symbol.className = "owned-matrix-symbol";
+    symbol.textContent = "◎";
+    const partner = document.createElement("small");
+    partner.className = "owned-matrix-partner";
+    partner.textContent = [...new Set(owned.map((weapon) => {
+      const other = key[0] === "g" ? weapon.seriesIndex : weapon.groupIndex;
+      return other === null || other === undefined ? "—" : matrixSkillName(`${key[0] === "g" ? "s" : "g"}${other}`, true);
+    }))].join("・");
+    cell.append(symbol, partner);
+    cell.title = `手持ち：${owned.map((weapon) => `${comparisonTargetName(weapon)}（${ownedSkillText(weapon) || "スキル未登録"}）`).join("／")}`;
+    return cell;
+  }
+  const paint = () => {
+    const mark = ownedMatrix.marks[markKey];
+    cell.className = `owned-matrix-cell manual${mark === "o" ? " mark-o" : mark === "x" ? " mark-x" : ""}`;
+    cell.textContent = mark === "o" ? "○" : mark === "x" ? "×" : "";
+    cell.title = "押すと ○ → × → 空 と切り替わります";
+  };
+  paint();
+  cell.tabIndex = 0;
+  const cycle = () => {
+    const mark = ownedMatrix.marks[markKey];
+    if (!mark) ownedMatrix.marks[markKey] = "o";
+    else if (mark === "o") ownedMatrix.marks[markKey] = "x";
+    else delete ownedMatrix.marks[markKey];
+    persistOwnedMatrix();
+    paint();
+  };
+  cell.addEventListener("click", cycle);
+  cell.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      cycle();
+    }
+  });
+  return cell;
+}
+
+// 表の形の編集：かたまり（名前・武器種・激化・列のスキル）の追加・削除・並び替え
+function createOwnedMatrixEditor() {
+  const editor = document.createElement("div");
+  editor.className = "owned-matrix-editor";
+  const changed = () => {
+    persistOwnedMatrix();
+    renderOwnedMatrix();
+  };
+  const skillOptions = [
+    ["グループスキル", prioritizedSkillOptions(GROUP_SKILLS, PRIORITY_GROUP_SKILL_INDICES).map(([index, label]) => [`g${index}`, label])],
+    ["シリーズスキル", prioritizedSkillOptions(SERIES_SKILLS, PRIORITY_SERIES_SKILL_INDICES).map(([index, label]) => [`s${index}`, label])],
+  ];
+
+  ownedMatrix.blocks.forEach((block, blockIndex) => {
+    const row = document.createElement("div");
+    row.className = "owned-matrix-edit-row";
+
+    const nameInput = document.createElement("input");
+    nameInput.type = "text";
+    nameInput.maxLength = 24;
+    nameInput.value = block.name;
+    nameInput.placeholder = matrixBlockTitle({ ...block, name: "" });
+    nameInput.addEventListener("change", () => { block.name = nameInput.value.trim(); changed(); });
+    const weaponSelect = document.createElement("select");
+    populateSelect(weaponSelect, WEAPON_TYPES, block.weaponType);
+    weaponSelect.addEventListener("change", () => { block.weaponType = Number(weaponSelect.value); changed(); });
+    const boostSelect = document.createElement("select");
+    populateSelect(boostSelect, OWNED_MATRIX_BOOST_OPTIONS, block.boost);
+    boostSelect.addEventListener("change", () => { block.boost = boostSelect.value; changed(); });
+    const field = (text, control) => {
+      const label = document.createElement("label");
+      const span = document.createElement("span");
+      span.textContent = text;
+      label.append(span, control);
+      return label;
+    };
+
+    // 列のスキル：札（×で消す）＋「列を追加」
+    const columns = document.createElement("div");
+    columns.className = "owned-matrix-columns";
+    block.columns.forEach((key, columnIndex) => {
+      const chip = document.createElement("span");
+      chip.className = "owned-matrix-chip";
+      const move = (text, offset, label) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = text;
+        button.title = label;
+        button.disabled = columnIndex + offset < 0 || columnIndex + offset >= block.columns.length;
+        button.addEventListener("click", () => {
+          const to = columnIndex + offset;
+          [block.columns[columnIndex], block.columns[to]] = [block.columns[to], block.columns[columnIndex]];
+          changed();
+        });
+        return button;
+      };
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.textContent = "×";
+      remove.title = "この列を消す";
+      remove.addEventListener("click", () => { block.columns.splice(columnIndex, 1); changed(); });
+      chip.append(move("◀", -1, "左へ"), matrixSkillName(key, true), move("▶", 1, "右へ"), remove);
+      columns.append(chip);
+    });
+    const addColumn = document.createElement("select");
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = "＋ 列のスキルを追加…";
+    addColumn.append(placeholder);
+    for (const [groupLabel, options] of skillOptions) {
+      const optgroup = document.createElement("optgroup");
+      optgroup.label = groupLabel;
+      for (const [value, label] of options) {
+        if (block.columns.includes(value)) continue;
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = label;
+        optgroup.append(option);
+      }
+      addColumn.append(optgroup);
+    }
+    addColumn.addEventListener("change", () => {
+      if (!addColumn.value) return;
+      block.columns.push(addColumn.value);
+      changed();
+    });
+    columns.append(addColumn);
+
+    const actions = document.createElement("div");
+    actions.className = "owned-matrix-edit-actions";
+    const actionButton = (text, label, onClick, disabled = false) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "owned-move-button";
+      button.textContent = text;
+      button.title = label;
+      button.setAttribute("aria-label", `${matrixBlockTitle(block)}を${label}`);
+      button.disabled = disabled;
+      button.addEventListener("click", onClick);
+      return button;
+    };
+    const swap = (offset) => () => {
+      const to = blockIndex + offset;
+      [ownedMatrix.blocks[blockIndex], ownedMatrix.blocks[to]] = [ownedMatrix.blocks[to], ownedMatrix.blocks[blockIndex]];
+      changed();
+    };
+    actions.append(
+      actionButton("↑", "上へ移動", swap(-1), blockIndex === 0),
+      actionButton("↓", "下へ移動", swap(1), blockIndex === ownedMatrix.blocks.length - 1),
+      actionButton("×", "削除", () => {
+        if (!window.confirm(`「${matrixBlockTitle(block)}」のかたまりを表から消しますか？（自分で付けた○×も消えます）`)) return;
+        ownedMatrix.blocks.splice(blockIndex, 1);
+        for (const markKey of Object.keys(ownedMatrix.marks)) {
+          if (markKey.startsWith(`${block.id}|`)) delete ownedMatrix.marks[markKey];
+        }
+        changed();
+      }),
+    );
+
+    const fields = document.createElement("div");
+    fields.className = "owned-matrix-edit-fields";
+    fields.append(field("名前（空なら自動）", nameInput), field("武器種", weaponSelect), field("激化", boostSelect));
+    row.append(fields, columns, actions);
+    editor.append(row);
+  });
+
+  const footer = document.createElement("div");
+  footer.className = "owned-matrix-edit-footer";
+  const addBlock = document.createElement("button");
+  addBlock.type = "button";
+  addBlock.className = "secondary small-button";
+  addBlock.textContent = "かたまりを追加";
+  addBlock.addEventListener("click", () => {
+    ownedMatrix.blocks.push(normalizeMatrixBlock({ weaponType: 0, boost: "", columns: ["g13"] }));
+    changed();
+  });
+  const reset = document.createElement("button");
+  reset.type = "button";
+  reset.className = "text-button";
+  reset.textContent = "最初の形（Excelと同じ）に戻す";
+  reset.addEventListener("click", () => {
+    if (!window.confirm("表の形を最初の形に戻します。自分で付けた○×も消えます。よろしいですか？")) return;
+    ownedMatrix = { blocks: OWNED_MATRIX_DEFAULT_BLOCKS.map(normalizeMatrixBlock), marks: {} };
+    changed();
+  });
+  footer.append(addBlock, reset);
+  editor.append(footer);
+  return editor;
 }
 
 // 手持ち武器の「一致にする条件」を、全部または武器種ごとにまとめて書き換える
