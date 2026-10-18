@@ -426,12 +426,20 @@ document.head.append(Object.assign(document.createElement("style"), {
     .step-frame > .bonus-wish-settings:not(.owned-weapon-settings) > .skill-filter-intro { display: none; }
     /* 次の一致：希望（例：攻撃×4）と、希望に当てはまる枠の強調 */
     .bonus-wish-next-target { padding: 2px 8px; border: 1px solid #8a7a45; border-radius: 999px; color: #ffe39a; font-size: 0.72rem; font-weight: 800; }
-    /* 希望に当てはまる枠：金の太い縁＋光＋明るい文字。関係ない枠：灰色で薄く */
-    .bonus-tag.wish-part {
-      opacity: 1; outline: 3px solid #ffd44d; outline-offset: 1px; font-weight: 900; color: #ffffff;
+    /* 希望に当てはまる枠：EXだけ金の太い縁＋光。EX以外は縁を付けず、白い文字を読みやすく。関係ない枠：灰色で薄く */
+    .comparison-bonus-set .bonus-tag.wish-part { opacity: 1; font-weight: 900; color: #ffffff; text-shadow: 0 1px 2px rgb(0 0 0 / 90%); }
+    .bonus-tag.wish-part.ex {
+      outline: 3px solid #ffd44d; outline-offset: 1px;
       box-shadow: 0 0 14px rgb(255 212 77 / 70%); filter: brightness(1.25) saturate(1.3);
     }
     .bonus-tag.not-wish { opacity: 0.25; filter: grayscale(1); }
+    /* 5枠を1つずつ指定 */
+    .bonus-wish-mode { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 0 0 12px; font-size: 0.82rem; font-weight: 700; }
+    .bonus-wish-mode label { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; white-space: nowrap; }
+    .bonus-wish-mode input[type="radio"] { width: 18px; height: 18px; min-height: 0; margin: 0; padding: 0; accent-color: #e8c766; flex: none; }
+    .bonus-wish-slots { display: grid; gap: 8px; max-width: 520px; }
+    .bonus-wish-slot { display: grid; grid-template-columns: 4.5em 1fr 1fr; gap: 8px; align-items: center; font-size: 0.8rem; font-weight: 700; }
+    .bonus-wish-slot select { height: 36px; }
     /* タブが6つになったので、広い画面では6列に（狭い画面は元の並び方のまま） */
     @media (min-width: 900px) {
       .app-tabs { grid-template-columns: repeat(var(--tab-count, 5), minmax(0, 1fr)); }
@@ -908,6 +916,8 @@ const openDetailKeys = new Set();
 // 武器種ごとの希望ボーナス { [weaponType]: { counts: [攻撃, 会心, 属性, 斬れ味・装填] } }
 const BONUS_WISHES_KEY = "gogma-seed-finder-bonus-wishes-v1";
 const BONUS_WISH_MAX = [5, 5, 4, 2];
+// 5枠を1つずつ指定するときの段階（起動時に使うので上の方で定義）
+const BONUS_SLOT_LEVELS = [[0, "段階は問わず"], [2, "III以上"], [3, "EXだけ"]];
 let bonusWishes = loadJsonObject(BONUS_WISHES_KEY);
 // 「1条件を詳しく絞り込む」でII・III・EXまで指定した希望 { [weaponType]: bonusId[] }
 const DETAIL_TIER_WISHES_KEY = "gogma-seed-finder-detail-tier-wishes-v1";
@@ -2514,7 +2524,11 @@ function loadJsonObject(key) {
 // 区別するときはII・III・EXまで指定した希望を、武器種ごとに呼び出す
 function detailFilterValuesFor(weaponType) {
   if (predictionIgnoreTier.checked) {
-    return bonusWishFor(weaponType).counts
+    const wish = bonusWishFor(weaponType);
+    if (wish.mode === "slots") {
+      return activeWishSlots(wish).filter((slot) => slot.c >= 0).map((slot) => slot.c);
+    }
+    return wish.counts
       .flatMap((count, category) => Array.from({ length: count }, () => category))
       .slice(0, 5);
   }
@@ -2528,7 +2542,9 @@ function saveDetailFilters() {
   if (predictionIgnoreTier.checked) {
     const counts = [0, 0, 0, 0];
     for (const category of values) counts[category] += 1;
-    if (counts.some((count) => count > 0)) bonusWishes[weaponType] = { counts };
+    // ここで決めた希望は「系統の数」として保存する（5枠指定の中身は残しておく）
+    const slots = bonusWishes[weaponType]?.slots;
+    if (counts.some((count) => count > 0) || slots) bonusWishes[weaponType] = { mode: "counts", counts, slots };
     else delete bonusWishes[weaponType];
     persistBonusWishes();
     renderBonusWishSection();
@@ -3477,12 +3493,16 @@ function createCompactBonusSet(target, bonusIds, highlightWish = false) {
   // 手持ち武器は、今のボーナスと枠ごとに比べて ↑（上がる）／↓（下がる）を付ける
   const current = target.kind === "owned" && ownedBonusesKnown(target) ? target.bonuses : null;
   // 狙い（リセット）は、希望の系統に当てはまる枠を強調し、それ以外を薄くする
-  const need = highlightWish && target.kind !== "owned" ? [...bonusWishFor(target.weaponType).counts] : null;
+  const wish = highlightWish && target.kind !== "owned" ? bonusWishFor(target.weaponType) : null;
+  const need = wish && wish.mode === "counts" ? [...wish.counts] : null;
+  const slotUsed = wish && wish.mode === "slots" ? slotWishAssignment(wish, bonusIds).used : null;
   bonusIds.forEach((bonusId, slotIndex) => {
     const tag = document.createElement("span");
     tag.className = `bonus-tag compact ${bonusClassName(bonusId)}${EX_BONUS_IDS.has(bonusId) ? " ex" : ""}`;
     tag.textContent = compactGogmaBonusName(target.weaponType, bonusId);
-    if (need) {
+    if (slotUsed) {
+      tag.classList.add(slotUsed.has(slotIndex) ? "wish-part" : "not-wish");
+    } else if (need) {
       const category = bonusCategoryId(bonusId);
       if (need[category] > 0) {
         need[category] -= 1;
@@ -3542,11 +3562,28 @@ function persistBonusWishes() {
   }
 }
 
+// 希望の持ち方は2通り：mode "counts"＝系統の数（順不同・段階は区別しない）、
+// mode "slots"＝5枠を1つずつ（系統 c：-1=何でも、段階 lv：0=問わず／2=III以上／3=EXだけ。並びは順不同）
+
+function normalizeWishSlots(slots) {
+  return Array.from({ length: 5 }, (_, index) => {
+    const slot = Array.isArray(slots) ? slots[index] : null;
+    const c = Math.trunc(Number(slot?.c));
+    const lv = Math.trunc(Number(slot?.lv));
+    return {
+      c: c >= 0 && c <= 3 ? c : -1,
+      lv: [0, 2, 3].includes(lv) ? lv : 0,
+    };
+  });
+}
+
 function bonusWishFor(weaponType) {
   const entry = bonusWishes[weaponType];
   return {
+    mode: entry?.mode === "slots" ? "slots" : "counts",
     counts: BONUS_WISH_MAX.map((max, category) =>
       Math.max(0, Math.min(max, Math.trunc(Number(entry?.counts?.[category]) || 0)))),
+    slots: normalizeWishSlots(entry?.slots),
   };
 }
 
@@ -3554,11 +3591,64 @@ function bonusWishTotal(wish) {
   return wish.counts.reduce((sum, count) => sum + count, 0);
 }
 
+// 「何でも・段階は問わず」以外の枠が1つでもあれば、希望ありとみなす
+function activeWishSlots(wish) {
+  return wish.slots.filter((slot) => slot.c >= 0 || slot.lv > 0);
+}
+
+function bonusWishActive(wish) {
+  return wish.mode === "slots"
+    ? activeWishSlots(wish).length > 0
+    : bonusWishTotal(wish) > 0;
+}
+
+function bonusFitsSlot(bonusId, slot) {
+  return (slot.c < 0 || bonusCategoryId(bonusId) === slot.c) && bonusTierRank(bonusId) >= slot.lv;
+}
+
+// 5枠指定の希望と結果の組み合わせ。条件の厳しい枠から順に、結果の枠を1つずつ割り当てる。
+// 全部割り当てられたら matched=true。返す used は「希望の枠に当てはまった結果の枠」の番号
+function slotWishAssignment(wish, bonusIds) {
+  const slots = activeWishSlots(wish)
+    .sort((a, b) => (b.lv - a.lv) || ((b.c >= 0) - (a.c >= 0)));
+  const taken = new Array(bonusIds.length).fill(false);
+  const assign = (slotIndex) => {
+    if (slotIndex === slots.length) return true;
+    for (let i = 0; i < bonusIds.length; i += 1) {
+      if (taken[i] || !bonusFitsSlot(bonusIds[i], slots[slotIndex])) continue;
+      taken[i] = true;
+      if (assign(slotIndex + 1)) return true;
+      taken[i] = false;
+    }
+    return false;
+  };
+  if (slots.length > 0 && assign(0)) {
+    return { matched: true, used: new Set(taken.flatMap((value, i) => (value ? [i] : []))) };
+  }
+  // 一致しないときも、当てはまる枠はできるだけ強調する
+  taken.fill(false);
+  for (const slot of slots) {
+    const i = bonusIds.findIndex((bonusId, index) => !taken[index] && bonusFitsSlot(bonusId, slot));
+    if (i >= 0) taken[i] = true;
+  }
+  return { matched: false, used: new Set(taken.flatMap((value, i) => (value ? [i] : []))) };
+}
+
+function wishSlotText(weaponType, slot) {
+  const categoryName = slot.c < 0
+    ? "何でも"
+    : (keepCategoriesForWeapon(weaponType, 1).find(([category]) => category === slot.c)?.[1]
+      ?? GOGMA_BONUS_CATEGORIES[slot.c][1]);
+  if (slot.lv === 3) return `${categoryName}EX`;
+  if (slot.lv === 2) return slot.c === 0 || slot.c === 1 ? `${categoryName}III以上` : `${categoryName}EX`;
+  return categoryName;
+}
+
 // 狙い（リセット）は武器種ごとの希望、手持ち（同じ構成）は武器ごとのEX数
 function targetHasWish(target) {
   return target.kind === "owned"
     ? (target.rule === "ex" ? target.minEx > 0 : ownedBonusesKnown(target))
-    : bonusWishTotal(bonusWishFor(target.weaponType)) > 0;
+    : bonusWishActive(bonusWishFor(target.weaponType));
 }
 
 function targetWishText(target) {
@@ -3569,6 +3659,16 @@ function targetWishText(target) {
 
 function bonusWishText(weaponType) {
   const wish = bonusWishFor(weaponType);
+  if (wish.mode === "slots") {
+    // 同じ指定はまとめる（例：攻撃EX×2＋攻撃×2＋属性EX）
+    const grouped = new Map();
+    for (const slot of activeWishSlots(wish)) {
+      const text = wishSlotText(weaponType, slot);
+      grouped.set(text, (grouped.get(text) ?? 0) + 1);
+    }
+    const slotParts = [...grouped].map(([text, count]) => (count > 1 ? `${text}×${count}` : text));
+    return slotParts.length > 0 ? slotParts.join("＋") : "指定なし";
+  }
   const parts = keepCategoriesForWeapon(weaponType, 1)
     .filter(([category]) => wish.counts[category] > 0)
     .map(([category, name]) => `${name}×${wish.counts[category]}`);
@@ -3579,6 +3679,7 @@ function bonusWishText(weaponType) {
 function rollMatchesBonusWish(target, bonusIds) {
   if (target.kind === "owned") return ownedRollMatches(target, bonusIds);
   const wish = bonusWishFor(target.weaponType);
+  if (wish.mode === "slots") return slotWishAssignment(wish, bonusIds).matched;
   const total = bonusWishTotal(wish);
   if (total === 0 || total > 5) return false;
   const counts = [0, 0, 0, 0];
@@ -3683,7 +3784,7 @@ function setupComparisonFrames() {
   else step1.append(ownedWeaponSection);
 
   const step2 = createStep("2", "希望ボーナスを決める（狙い）",
-    "狙いの武器種ごとに、リセットで欲しい系統の数を決めます。手持ち武器の条件は、①の「手持ち武器」の欄で武器ごとに決めます。");
+    "狙いの武器種ごとに、リセットで欲しいボーナスを決めます（系統の数か、5枠を1つずつ）。手持ち武器の条件は、①の「手持ち武器」の欄で武器ごとに決めます。");
   step2.append(bonusWishSection);
 
   const step3 = createStep("3", "結果を見る",
@@ -3830,7 +3931,7 @@ function renderBonusWishSection() {
   const title = document.createElement("strong");
   title.textContent = "狙い（リセットして再復元）の希望ボーナス";
   const description = document.createElement("p");
-  description.textContent = "上で登録した武器種ごとに、リセットで欲しい系統の数を決めます（順不同・II／III／EXは区別しない）。当たりは表の「一致」列に出ます。設定はこのブラウザに保存されます。";
+  description.textContent = "上で登録した武器種ごとに、リセットで欲しいボーナスを決めます（系統の数か、5枠を1つずつ。どちらも順不同）。当たりは表の「一致」列に出ます。設定はこのブラウザに保存されます。";
   intro.append(title, description);
 
   if (weaponTypes.length === 0) {
@@ -3884,6 +3985,64 @@ function renderBonusWishSection() {
     total.className = "bonus-wish-total";
     categoryFieldset.append(legend, categoryGrid, total);
 
+    // 指定のしかた：系統の数／5枠を1つずつ
+    const modeBox = document.createElement("div");
+    modeBox.className = "bonus-wish-mode";
+    const modeRadios = [
+      ["counts", "系統の数で指定（段階は区別しない）"],
+      ["slots", "5枠を1つずつ指定（EX・III以上も指定できる）"],
+    ].map(([value, text]) => {
+      const label = document.createElement("label");
+      const radio = document.createElement("input");
+      radio.type = "radio";
+      radio.name = `bonus-wish-mode-${weaponType}`;
+      radio.value = value;
+      radio.checked = wish.mode === value;
+      label.append(radio, text);
+      modeBox.append(label);
+      return radio;
+    });
+
+    // 5枠を1つずつ：系統（何でも／攻撃…）＋段階（問わず／III以上／EXだけ）。並びは順不同
+    const slotFieldset = document.createElement("fieldset");
+    slotFieldset.className = "bonus-wish-categories";
+    const slotLegend = document.createElement("legend");
+    slotLegend.textContent = "5枠の希望（並び順は関係なし。いらない枠は「何でも」のまま）";
+    const slotList = document.createElement("div");
+    slotList.className = "bonus-wish-slots";
+    const categoryOptions = [[-1, "何でも"], ...keepCategoriesForWeapon(weaponType, 1)];
+    const slotSelects = wish.slots.map((slot, index) => {
+      const line = document.createElement("label");
+      line.className = "bonus-wish-slot";
+      const text = document.createElement("span");
+      text.textContent = `${index + 1}枠目`;
+      const categorySelect = document.createElement("select");
+      populateSelect(categorySelect, categoryOptions, slot.c);
+      const levelSelect = document.createElement("select");
+      // III があるのは攻撃・会心だけ。属性・斬れ味・何でもは「問わず／EXだけ」
+      const fillLevels = (selected) => {
+        const category = Number(categorySelect.value);
+        const levels = category === 0 || category === 1
+          ? BONUS_SLOT_LEVELS
+          : BONUS_SLOT_LEVELS.filter(([level]) => level !== 2);
+        const value = levels.some(([level]) => level === selected) ? selected : (selected === 2 ? 3 : 0);
+        populateSelect(levelSelect, levels, value);
+      };
+      fillLevels(slot.lv);
+      categorySelect.addEventListener("change", () => fillLevels(Number(levelSelect.value)));
+      line.append(text, categorySelect, levelSelect);
+      slotList.append(line);
+      return { categorySelect, levelSelect, fillLevels };
+    });
+    slotFieldset.append(slotLegend, slotList);
+
+    const updateModeView = () => {
+      const slotsMode = modeRadios[1].checked;
+      categoryFieldset.hidden = slotsMode;
+      slotFieldset.hidden = !slotsMode;
+    };
+    updateModeView();
+
     const note = document.createElement("p");
     note.className = "weapon-filter-empty";
     note.textContent = weaponType === BOW_WEAPON_TYPE
@@ -3907,9 +4066,19 @@ function renderBonusWishSection() {
     const save = () => {
       const counts = [0, 0, 0, 0];
       categorySelects.forEach((select, category) => { counts[category] = Number(select.value); });
-      if (counts.some((count) => count > 0)) bonusWishes[weaponType] = { counts };
-      else delete bonusWishes[weaponType];
+      const mode = modeRadios[1].checked ? "slots" : "counts";
+      const slots = slotSelects.map(({ categorySelect, levelSelect }) => ({
+        c: Number(categorySelect.value),
+        lv: Number(levelSelect.value),
+      }));
+      if (mode === "slots" || counts.some((count) => count > 0)
+        || slots.some((slot) => slot.c >= 0 || slot.lv > 0)) {
+        bonusWishes[weaponType] = { mode, counts, slots };
+      } else {
+        delete bonusWishes[weaponType];
+      }
       persistBonusWishes();
+      updateModeView();
       updateState();
       updateTotal();
       renderComparisonTable();
@@ -3920,14 +4089,20 @@ function renderBonusWishSection() {
       }
     };
     categoryGrid.addEventListener("change", save);
+    slotList.addEventListener("change", save);
+    modeBox.addEventListener("change", save);
     clearButton.addEventListener("click", () => {
       categorySelects.forEach((select) => { select.value = "0"; });
+      slotSelects.forEach(({ categorySelect, fillLevels }) => {
+        categorySelect.value = "-1";
+        fillLevels(0);
+      });
       save();
     });
 
     const body = document.createElement("div");
     body.className = "weapon-filter-body";
-    body.append(categoryFieldset, note, clearButton);
+    body.append(modeBox, categoryFieldset, slotFieldset, note, clearButton);
     row.append(summary, body);
     return row;
   });
