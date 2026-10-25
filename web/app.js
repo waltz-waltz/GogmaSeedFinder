@@ -505,6 +505,18 @@ document.head.append(Object.assign(document.createElement("style"), {
     .artian-wish-stepper button { height: 34px; border: 1px solid #6b6a55; border-radius: 8px; background: #26271f; color: #f2eddc; font-size: 1.1rem; font-weight: 900; cursor: pointer; }
     .artian-wish-stepper button:disabled { opacity: 0.3; cursor: default; }
     .artian-wish-count { text-align: center; color: #ffe39a; font-size: 1.1rem; font-weight: 900; }
+    .artian-wish-none { padding: 3px 6px; border: 1px dashed #6b6a55; border-radius: 6px; background: transparent; color: #cfcab4; font-size: 0.72rem; font-weight: 700; cursor: pointer; }
+    .artian-wish-card.excluded { border-color: #c0504d; background: rgb(192 80 77 / 14%); }
+    .artian-wish-card.excluded .artian-wish-count { color: #ff9b97; }
+    .artian-wish-card.excluded .artian-wish-none { border-style: solid; border-color: #c0504d; color: #ffd0cd; }
+    /* 07の表：希望に当てはまる枠は色で塗りつぶし＋金の縁、それ以外は薄く */
+    .artian-base-table .bonus-tag.artian-hit { font-weight: 900; text-shadow: none; }
+    .artian-base-table .bonus-tag.artian-hit.attack { background: #e69f00; border-color: #ffc04d; color: #1a1000; }
+    .artian-base-table .bonus-tag.artian-hit.element { background: #8e44c9; border-color: #d4a6ff; color: #ffffff; }
+    .artian-base-table .bonus-tag.artian-hit.sharpness-ammo { background: #f2f2f2; border-color: #ffffff; color: #111111; }
+    .artian-base-table .bonus-tag.artian-hit.affinity { background: #6b6b6b; border-color: #b5b5b5; color: #ffffff; }
+    .artian-base-table .bonus-tag.wish-part { outline: 2px solid #ffd44d; outline-offset: 2px; box-shadow: 0 0 10px 2px rgb(255 212 77 / 55%); }
+    .artian-base-table .bonus-tag.artian-off { opacity: 0.45; }
     .artian-wish-footer { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; color: #ffe39a; font-size: 0.86rem; font-weight: 800; }
     .artian-wish-footer .text-button { color: #ffffff; }
     /* 07の表：希望どおりの行は金色の帯 */
@@ -6931,12 +6943,10 @@ function snapshotArtianBaseFilters() {
 }
 
 function visibleArtianBaseRolls() {
-  const requirements = snapshotArtianBaseFilters().filter((value) => value !== null);
+  const { counts, none } = artianWishFor(Number(artianBaseWeaponSelect.value));
   const allRolls = artianBasePredictionRolls.map((roll, index) => ({ roll, index }));
-  if (!artianFilterEnabled.checked || requirements.length === 0) return allRolls;
-  return allRolls.filter(({ roll }) =>
-    artianBonusMultisetContains(roll.bonusIds, requirements),
-  );
+  if (!artianFilterEnabled.checked || !artianWishIsSet(counts, none)) return allRolls;
+  return allRolls.filter(({ roll }) => artianRollMeetsCounts(roll.bonusIds, counts, none));
 }
 
 function renderArtianBaseTable() {
@@ -6978,9 +6988,10 @@ function createArtianBaseRow(roll, index) {
   beforeCounterCell.textContent = roll.counter.toLocaleString("ja-JP");
   row.append(offsetCell, beforeCounterCell, createArtianSavedStateCell(index + 1));
   // 改良版：基礎攻撃力はいつも、希望に当てはまる枠も、金の縁で強調。希望どおりの行は金色の帯
-  const { counts } = artianWishFor(Number(artianBaseWeaponSelect.value));
+  const { counts, none } = artianWishFor(Number(artianBaseWeaponSelect.value));
   const need = [...counts];
-  if (artianRollMeetsCounts(roll.bonusIds, counts)) row.classList.add("prediction-match", "artian-wish-row");
+  const hasWish = artianWishIsSet(counts, none);
+  if (artianRollMeetsCounts(roll.bonusIds, counts, none)) row.classList.add("prediction-match", "artian-wish-row");
   for (const bonusId of roll.bonusIds) {
     const cell = document.createElement("td");
     const tag = document.createElement("span");
@@ -6988,10 +6999,13 @@ function createArtianBaseRow(roll, index) {
     tag.textContent = artianBaseBonusName(Number(artianBaseWeaponSelect.value), bonusId);
     const category = ARTIAN_CATEGORY_BY_ID.get(bonusId);
     if (need[category] > 0) {
+      // 希望に当てはまる枠：色で塗りつぶし＋金の縁
       need[category] -= 1;
-      tag.classList.add("wish-part");
+      tag.classList.add("artian-hit", "wish-part");
     } else if (bonusId === 4) {
       tag.classList.add("wish-part");
+    } else if (hasWish) {
+      tag.classList.add("artian-off");
     }
     cell.append(tag);
     row.append(cell);
@@ -7388,12 +7402,24 @@ function clearArtianObservations(reason) {
 function artianWishFor(weaponType) {
   const saved = artianWishes[weaponType];
   if (saved && Array.isArray(saved.counts)) {
+    const none = [0, 1, 2, 3].map((category) => Array.isArray(saved.none) && saved.none[category] === true);
     return {
-      counts: [0, 1, 2, 3].map((category) => Math.max(0, Math.min(5, Math.trunc(Number(saved.counts[category]) || 0)))),
+      counts: [0, 1, 2, 3].map((category) =>
+        none[category] ? 0 : Math.max(0, Math.min(5, Math.trunc(Number(saved.counts[category]) || 0)))),
+      none,
       attr: saved.attr === 0 ? 0 : 1,
     };
   }
-  return { counts: wishCategoryCounts(weaponType).counts, attr: BOWGUN_WEAPON_TYPES.has(weaponType) ? 0 : 1 };
+  return {
+    counts: wishCategoryCounts(weaponType).counts,
+    none: [false, false, false, false],
+    attr: BOWGUN_WEAPON_TYPES.has(weaponType) ? 0 : 1,
+  };
+}
+
+// 希望が1つでも決まっているか（系統の数、または「不要」）
+function artianWishIsSet(counts, none) {
+  return counts.some((count) => count > 0) || (none || []).some(Boolean);
 }
 
 // 04の狙いの希望を、系統の数だけにしたもの。EX・III以上の指定があれば needsTier=true（通常アーティアでは出ない）
@@ -7424,21 +7450,26 @@ function artianCategoryName(weaponType, category) {
   return BOWGUN_WEAPON_TYPES.has(weaponType) ? "装填" : "斬れ味";
 }
 
-function artianWishText(weaponType, counts) {
+function artianWishText(weaponType, counts, none = []) {
   const parts = [0, 2, 3, 1]
     .filter((category) => counts[category] > 0)
     .map((category) => `${artianCategoryName(weaponType, category)}×${counts[category]}`);
-  return parts.length > 0 ? parts.join("＋") : "指定なし";
+  const excluded = [0, 2, 3, 1]
+    .filter((category) => none[category])
+    .map((category) => `${artianCategoryName(weaponType, category)}なし`);
+  const all = [...parts.length > 0 ? [parts.join("＋")] : [], ...excluded];
+  return all.length > 0 ? all.join("・") : "指定なし";
 }
 
-// 結果の5枠が希望の系統の数を満たすか（順不同）
-function artianRollMeetsCounts(bonusIds, counts) {
-  if (counts.every((count) => count === 0)) return false;
+// 結果の5枠が希望の系統の数を満たすか（順不同）。「不要」にした系統が1つでもあれば外れ
+function artianRollMeetsCounts(bonusIds, counts, none = []) {
+  if (!artianWishIsSet(counts, none)) return false;
   const have = [0, 0, 0, 0];
   for (const bonusId of bonusIds) {
     const category = ARTIAN_CATEGORY_BY_ID.get(bonusId);
     if (category !== undefined) have[category] += 1;
   }
+  if (none.some((excluded, category) => excluded && have[category] > 0)) return false;
   return counts.every((need, category) => have[category] >= need);
 }
 
@@ -7448,8 +7479,8 @@ function renderArtianWishCards() {
   const pool = artianBasePool(weaponType, currentArtianAttributeForce());
   const wish = artianWishFor(weaponType);
   const total = wish.counts.reduce((sum, count) => sum + count, 0);
-  const save = (counts) => {
-    artianWishes[weaponType] = { counts, attr: currentArtianAttributeForce() === 0 ? 0 : 1 };
+  const save = (counts, none = wish.none) => {
+    artianWishes[weaponType] = { counts, none, attr: currentArtianAttributeForce() === 0 ? 0 : 1 };
     persistArtianWishes();
     renderArtianWishCards();
     resetTablePage("artianBase");
@@ -7460,7 +7491,8 @@ function renderArtianWishCards() {
     const category = ARTIAN_CATEGORY_BY_ID.get(bonusId);
     const cap = pool.caps.get(bonusId) ?? 5;
     const card = document.createElement("div");
-    card.className = `artian-wish-card ${artianBaseBonusClassName(bonusId)}${wish.counts[category] > 0 ? " active" : ""}`;
+    const excluded = wish.none[category];
+    card.className = `artian-wish-card ${artianBaseBonusClassName(bonusId)}${wish.counts[category] > 0 ? " active" : ""}${excluded ? " excluded" : ""}`;
     const name = document.createElement("strong");
     name.textContent = artianCategoryName(weaponType, category);
     const minus = document.createElement("button");
@@ -7473,9 +7505,9 @@ function renderArtianWishCards() {
     minus.setAttribute("aria-label", `${name.textContent}を1つ減らす`);
     plus.setAttribute("aria-label", `${name.textContent}を1つ増やす`);
     value.className = "artian-wish-count";
-    value.textContent = wish.counts[category] > 0 ? `×${wish.counts[category]}` : "—";
+    value.textContent = excluded ? "不要" : wish.counts[category] > 0 ? `×${wish.counts[category]}` : "—";
     minus.disabled = wish.counts[category] === 0;
-    plus.disabled = wish.counts[category] >= cap || total >= 5;
+    plus.disabled = excluded || wish.counts[category] >= cap || total >= 5;
     minus.addEventListener("click", () => {
       const counts = [...wish.counts];
       counts[category] -= 1;
@@ -7491,18 +7523,30 @@ function renderArtianWishCards() {
     stepper.append(minus, value, plus);
     const capNote = document.createElement("small");
     capNote.textContent = `最大${cap}枠`;
-    card.append(name, stepper, capNote);
+    const noneButton = document.createElement("button");
+    noneButton.type = "button";
+    noneButton.className = "artian-wish-none";
+    noneButton.setAttribute("aria-pressed", excluded ? "true" : "false");
+    noneButton.textContent = excluded ? "不要を解除" : `${name.textContent}は不要`;
+    noneButton.addEventListener("click", () => {
+      const none = [...wish.none];
+      none[category] = !none[category];
+      const counts = [...wish.counts];
+      if (none[category]) counts[category] = 0;
+      save(counts, none);
+    });
+    card.append(name, stepper, noneButton, capNote);
     return card;
   });
   const footer = document.createElement("div");
   footer.className = "artian-wish-footer";
   const summary = document.createElement("span");
-  summary.textContent = `希望：${artianWishText(weaponType, wish.counts)}（合計 ${total} / 5枠）`;
+  summary.textContent = `希望：${artianWishText(weaponType, wish.counts, wish.none)}（合計 ${total} / 5枠）`;
   const clear = document.createElement("button");
   clear.type = "button";
   clear.className = "text-button";
   clear.textContent = "この武器種の希望をクリア";
-  clear.addEventListener("click", () => save([0, 0, 0, 0]));
+  clear.addEventListener("click", () => save([0, 0, 0, 0], [false, false, false, false]));
   footer.append(summary, clear);
   artianFilterGrid.classList.add("artian-wish-grid");
   artianFilterGrid.replaceChildren(...cards, footer);
@@ -7529,10 +7573,10 @@ function renderArtianNextList() {
     const counter = artianBaseCounterForWeapon(weaponType);
     const wish = artianWishFor(weaponType);
     if (counter === null) { noCounter.push(weaponName); continue; }
-    if (wish.counts.every((value) => value === 0)) { noWish.push(weaponName); continue; }
+    if (!artianWishIsSet(wish.counts, wish.none)) { noWish.push(weaponName); continue; }
     const attr = BOWGUN_WEAPON_TYPES.has(weaponType) ? 0 : wish.attr;
     const rolls = predictArtianBaseRolls(saveState.baseSeed, weaponType, ARTIAN_R8_ENUM, attr, counter, count);
-    const index = rolls.findIndex((roll) => artianRollMeetsCounts(roll.bonusIds, wish.counts));
+    const index = rolls.findIndex((roll) => artianRollMeetsCounts(roll.bonusIds, wish.counts, wish.none));
     rows.push({ weaponType, weaponName, attr, wish, index, roll: rolls[index] });
   }
   rows.sort((a, b) => (a.index < 0 ? Infinity : a.index) - (b.index < 0 ? Infinity : b.index));
@@ -7547,7 +7591,7 @@ function renderArtianNextList() {
       row.index < 0 ? "—" : `あと${row.index + 1}本`,
       row.weaponName,
       row.attr === 0 ? "無属性" : "属性あり",
-      artianWishText(row.weaponType, row.wish.counts),
+      artianWishText(row.weaponType, row.wish.counts, row.wish.none),
     ].map((text, i) => {
       const td = document.createElement("td");
       td.className = ["next-when", "next-weapon", "", "next-wish"][i];
