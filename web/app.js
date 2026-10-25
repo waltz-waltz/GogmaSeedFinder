@@ -53,6 +53,9 @@ const ARTIAN_ATTRIBUTE_KINDS = [
   [1, "属性・状態異常"],
 ];
 const ARTIAN_LIVE_VERIFIED_WEAPON_TYPES = new Set([0, 6, 11, 12, 13]);
+// 改良版：通常アーティアのボーナス番号 → 系統（0攻撃 1会心 2属性 3斬れ味・装填。04の希望と同じ数え方）
+const ARTIAN_CATEGORY_BY_ID = new Map([[4, 0], [8, 1], [6, 2], [7, 3]]);
+const ARTIAN_ID_BY_CATEGORY = new Map([[0, 4], [1, 8], [2, 6], [3, 7]]);
 
 const GOGMA_BONUSES = [
   [8, "基礎攻撃力強化Ⅱ"],
@@ -470,6 +473,75 @@ document.head.append(Object.assign(document.createElement("style"), {
     .owned-sort-button { padding: 6px 12px; border: 2px solid #3a3c31; border-radius: 8px; background: #151612; color: #c9c6b8; font-size: 0.78rem; font-weight: 800; cursor: pointer; }
     .owned-sort-button.active { border-color: #4f9a92; background: rgb(79 154 146 / 16%); color: #bff3ec; }
     .owned-group-heading { margin: 14px 0 6px; padding-bottom: 4px; border-bottom: 2px solid #4f9a92; color: #8fe0d6; font-size: 0.95rem; }
+    /* ===== 通常アーティア（06・07）の改良 ===== */
+    /* 武器種の一覧（押せる）：特定済みは明るく、未特定は灰色 */
+    .artian-weapon-picker { margin: 18px 0 8px; padding: 14px 16px; border: 2px solid #8e7a45; border-radius: 12px; background: rgb(214 179 92 / 5%); }
+    .artian-weapon-picker h3 { margin: 0 0 4px; font-size: 0.98rem; }
+    .artian-weapon-picker p { margin: 0 0 10px; color: #b9b6a4; font-size: 0.76rem; }
+    button.artian-counter-overview-item {
+      display: grid; gap: 2px; padding: 8px 10px; border: 2px solid #8e7a45; border-radius: 8px;
+      background: #26231a; color: #f2eddc; text-align: left; font: inherit; cursor: pointer;
+    }
+    button.artian-counter-overview-item strong { color: #ffe39a; font-size: 1rem; }
+    button.artian-counter-overview-item.unknown { border-color: #3a3c31; background: #151612; color: #77756a; opacity: 0.7; }
+    button.artian-counter-overview-item.unknown strong { color: #6e6c62; font-size: 0.8rem; }
+    button.artian-counter-overview-item.selected { outline: 3px solid #e8c766; outline-offset: 1px; opacity: 1; }
+    button.artian-counter-overview-item:hover { filter: brightness(1.2); opacity: 1; }
+    /* 入力を空にしたあとの「元に戻す」 */
+    .artian-undo { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin: 10px 0 0; padding: 8px 12px; border: 1px solid #8e7a45; border-radius: 8px; background: #26231a; color: #ffe39a; font-size: 0.82rem; font-weight: 700; }
+    .artian-undo[hidden] { display: none; }
+    .artian-observation-row.card-input .roll-number { white-space: nowrap; }
+    /* 07の希望：系統ごとのカード（−／＋で数を決める） */
+    .artian-wish-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+    .artian-wish-card { display: grid; gap: 6px; padding: 10px 12px; border: 1px solid #3a3c31; border-left-width: 5px; border-radius: 10px; background: rgb(0 0 0 / 18%); }
+    .artian-wish-card.attack { border-left-color: #e69f00; }
+    .artian-wish-card.affinity { border-left-color: #6b6b6b; }
+    .artian-wish-card.element { border-left-color: #8e44c9; }
+    .artian-wish-card.sharpness-ammo { border-left-color: #f2f2f2; }
+    .artian-wish-card.active { border-color: #e8c766; background: rgb(214 179 92 / 12%); }
+    .artian-wish-card strong { font-size: 0.95rem; }
+    .artian-wish-card small { color: #8a8775; font-size: 0.7rem; }
+    .artian-wish-stepper { display: grid; grid-template-columns: 38px 1fr 38px; gap: 6px; align-items: center; }
+    .artian-wish-stepper button { height: 34px; border: 1px solid #6b6a55; border-radius: 8px; background: #26271f; color: #f2eddc; font-size: 1.1rem; font-weight: 900; cursor: pointer; }
+    .artian-wish-stepper button:disabled { opacity: 0.3; cursor: default; }
+    .artian-wish-count { text-align: center; color: #ffe39a; font-size: 1.1rem; font-weight: 900; }
+    .artian-wish-footer { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; color: #ffe39a; font-size: 0.86rem; font-weight: 800; }
+    .artian-wish-footer .text-button { color: #ffffff; }
+    /* 07の表：希望どおりの行は金色の帯 */
+    .artian-base-table tbody tr.artian-wish-row { background: linear-gradient(90deg, rgb(232 199 102 / 20%), rgb(232 199 102 / 6%)); }
+    .artian-base-table tbody tr.artian-wish-row > th:first-child { box-shadow: inset 5px 0 0 #e8c766; color: #ffe39a; }
+    /* 07：全武器種の次の当たり */
+    .artian-next-list { margin-top: 22px; padding: 14px 18px; border: 2px solid #8fae6f; border-radius: 12px; background: rgb(110 150 90 / 10%); }
+    .artian-next-wrap { overflow-x: auto; }
+    .artian-next-rest { margin: 10px 0 0; color: #a9a690; font-size: 0.76rem; }
+    .artian-mini-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+    .next-match-table .next-artian { color: #cfeec0; font-weight: 800; white-space: nowrap; }
+    /* 00 仕組み */
+    .spec-block { margin-top: 22px; padding: 16px 18px; border: 2px solid #6b6a55; border-radius: 14px; background: rgb(0 0 0 / 16%); }
+    .spec-block h3 { margin: 0 0 12px; font-size: 1.1rem; }
+    .spec-flow { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+    .spec-step { display: grid; grid-template-columns: 44px 1fr; gap: 12px; padding: 12px 14px; border: 2px solid #8e7a45; border-radius: 12px; background: #1d1c16; }
+    .spec-step-number { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: #e8c766; color: #1a1708; font-size: 1.2rem; font-weight: 900; }
+    .spec-step-body strong { font-size: 1rem; color: #ffe39a; }
+    .spec-step-body p { margin: 4px 0 0; color: #e6e1cf; font-size: 0.86rem; line-height: 1.6; }
+    .spec-caution { color: #ffb4a8 !important; font-weight: 800; }
+    .spec-tab-link { color: #b9b6a4 !important; font-size: 0.78rem !important; }
+    .spec-tab-link .text-button, .spec-side .text-button, .fork-guide-box .text-button { color: #8fe0d6; font-weight: 800; }
+    .spec-arrow { text-align: center; color: #e8c766; font-size: 1.4rem; font-weight: 900; line-height: 1; }
+    .spec-side { margin-top: 10px; padding: 10px 14px; border: 2px dashed #4f9a92; border-radius: 12px; }
+    .spec-side strong { color: #8fe0d6; }
+    .spec-side p { margin: 4px 0 0; color: #e6e1cf; font-size: 0.86rem; }
+    .spec-table-wrap { overflow-x: auto; }
+    .spec-table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
+    .spec-table th, .spec-table td { padding: 8px 10px; border-bottom: 1px solid rgb(255 255 255 / 10%); text-align: left; vertical-align: top; }
+    .spec-table thead th { color: #b9b6a4; font-size: 0.76rem; border-bottom: 2px solid #8e7a45; }
+    .spec-table tbody th { color: #ffe39a; white-space: nowrap; }
+    .spec-note { margin: 8px 0 0; color: #a9a690; font-size: 0.76rem; }
+    .spec-list { margin: 0; padding-left: 1.3em; display: grid; gap: 6px; color: #e6e1cf; font-size: 0.88rem; line-height: 1.6; }
+    /* 01 使い方：改良版で増えた機能 */
+    .fork-guide-box { margin-bottom: 22px; padding: 14px 18px; border: 3px solid #b8973f; border-radius: 14px; background: rgb(214 179 92 / 6%); }
+    .fork-guide-box h3 { margin: 0 0 8px; }
+    .fork-guide-box ul { margin: 0; padding-left: 1.2em; display: grid; gap: 4px; font-size: 0.86rem; color: #e6e1cf; }
     /* 元のツールの「ドラッグで並び替え」の案内（改良版はドラッグに対応していないので隠す） */
     .target-reorder-hint { display: none; }
     /* 手持ち武器：小見出し・スキルのカード */
@@ -980,6 +1052,9 @@ const openArtianCounterSearchButtons = [...document.querySelectorAll("[data-open
 // 「手持ち武器」タブ（手持ち武器の登録・編集だけをするページ）。タブの一覧を集める前に足しておく
 // （元のツールの 06・07 通常アーティアの後ろに付くので、番号は自動で 08 になる）
 const ownedTabContainer = createOwnedWeaponTab();
+// 「00 仕組み（はじめに読む）」タブと、01 使い方の「改良版で増えた機能」
+createSpecTab();
+addForkGuideBox();
 const tabButtons = [...document.querySelectorAll("[data-tab]")];
 const tabViews = [...document.querySelectorAll("[data-tab-view]")];
 
@@ -1014,6 +1089,13 @@ let bonusPrediction = persistedAppState.bonusPrediction;
 // 通常アーティアの作成カウンター（武器種ごと）。起動時に使うので早めに用意する
 let artianBaseState = persistedAppState.artianBaseState;
 let artianBasePredictionRolls = [];
+// 改良版で足した通常アーティアの部品（起動時に作る）
+let artianSearchOverviewGrid = null;
+let artianObservationUndo = null;
+let artianWishBox = null;
+let artianNextList = null;
+const ARTIAN_WISHES_KEY = "gogma-seed-finder-artian-wishes-v1";
+let artianWishes = loadJsonObject(ARTIAN_WISHES_KEY);
 // 表のページ切り替え（100件ずつ）。改良版では通常アーティアの表だけで使う
 const TABLE_PAGE_SIZE = 100;
 const tablePageIndexes = { artianBase: 0 };
@@ -1138,6 +1220,7 @@ let currentSkillObservations = [];
 
 wireTablePagers();
 closeSaveFeedbackButton?.addEventListener("click", hideSaveFeedback);
+setupArtianEnhancements();
 
 renderComparisonTargets();
 renderBonusOperation();
@@ -1335,6 +1418,14 @@ skillFilterSeriesOptions.addEventListener("change", () => renderSkillPredictionT
 exportSkillCsvButton.addEventListener("click", () => exportVisibleSkillPredictionsCsv());
 findSkillPositionButton.addEventListener("click", () => void findSkillPosition());
 
+// 00 仕組み・01 使い方の中の「○○タブへ」のリンク
+document.addEventListener("click", (event) => {
+  const link = event.target instanceof Element ? event.target.closest("[data-goto-tab]") : null;
+  if (!link) return;
+  setActiveTab(link.dataset.gotoTab);
+  document.querySelector(".app-tabs")?.scrollIntoView({ behavior: "smooth", block: "start" });
+});
+
 // 通常アーティアへの移動ボタン（使い方のTIPS・復元ボーナス未来予測の案内など）
 openArtianFutureButtons.forEach((button) => {
   button.addEventListener("click", () => {
@@ -1357,6 +1448,9 @@ openArtianCounterSearchButtons.forEach((button) => {
 
 // 通常アーティアの操作（元のツールから）
 function updateArtianTargetSelection(weaponType, attributeForce) {
+  // 改良版：別の武器種に進んだら、前の武器種の入力は合わないので空にする（元に戻せる）
+  const weaponChanged = Number(weaponType) !== Number(artianBaseWeaponSelect.value);
+  if (weaponChanged) clearArtianObservations("武器種を変えたので、");
   const observations = snapshotArtianObservationValues();
   const filters = snapshotArtianBaseFilters();
   artianBaseWeaponSelect.value = String(weaponType);
@@ -1410,6 +1504,133 @@ artianFilterGrid.addEventListener("change", () => {
   resetTablePage("artianBase");
   renderArtianBaseTable();
 });
+
+// 「00 仕組み（はじめに読む）」：カウンターが進む仕組みと、武器ができるまでの流れ
+// （通常アーティア→巨戟化→復元強化の進み方はユーザーが実機で調べた内容）
+function createSpecTab() {
+  const nav = document.querySelector(".app-tabs");
+  const firstView = document.querySelector("[data-tab-view]");
+  if (!nav || !firstView) return;
+  const button = document.createElement("button");
+  const number = document.createElement("span");
+  button.type = "button";
+  button.className = "tab-button";
+  button.dataset.tab = "spec";
+  button.setAttribute("aria-selected", "false");
+  number.textContent = "00";
+  button.append(number, "仕組み（はじめに読む）");
+  nav.prepend(button);
+  nav.style.setProperty("--tab-count", String(nav.children.length));
+
+  const view = document.createElement("div");
+  view.className = "tab-view";
+  view.dataset.tabView = "spec";
+  view.hidden = true;
+  view.innerHTML = `
+    <section class="panel spec-panel">
+      <div class="section-heading"><div><p class="step">HOW IT WORKS</p><h2>仕組み（はじめに読む）</h2></div></div>
+      <p class="prediction-intro">このツールは、ゲームの中で「何回目に何が出るか」を数えている番号（カウンター）を使って、先の結果を予測します。
+        カウンターは全部で4種類あり、それぞれ<strong>決まった操作をしたときだけ</strong>1つ進みます。</p>
+
+      <section class="spec-block">
+        <h3>武器ができるまでの流れと、進むカウンター</h3>
+        <ol class="spec-flow">
+          <li class="spec-step">
+            <span class="spec-step-number">①</span>
+            <div class="spec-step-body">
+              <strong>通常アーティア武器を作る（レア8）</strong>
+              <p>その武器種の<b>通常アーティアカウンター</b>が1つ進みます。</p>
+              <p>5枠の系統（攻撃・会心・属性・斬れ味／装填）が決まります。この時点では II・III・EX はありません。</p>
+              <p class="spec-tab-link">予測：<button type="button" class="text-button" data-goto-tab="artian-future">07 通常アーティア未来予測</button>／特定：<button type="button" class="text-button" data-goto-tab="artian-search">06</button></p>
+            </div>
+          </li>
+          <li class="spec-arrow" aria-hidden="true">↓</li>
+          <li class="spec-step">
+            <span class="spec-step-number">②</span>
+            <div class="spec-step-body">
+              <strong>巨戟アーティア武器への強化（1回目の巨戟化）</strong>
+              <p><b>スキルカウンター</b>が1つ進みます（シリーズスキル・グループスキルが付きます）。</p>
+              <p>5枠の系統は<b>そのまま引き継がれます</b>（II・III・EXにもなりません）。</p>
+              <p class="spec-caution">※ 復元ボーナスカウンターは進みません。</p>
+              <p class="spec-tab-link">予測：<button type="button" class="text-button" data-goto-tab="skill-future">05 スキル未来予測</button>／特定：<button type="button" class="text-button" data-goto-tab="skill-search">03</button></p>
+            </div>
+          </li>
+          <li class="spec-arrow" aria-hidden="true">↓</li>
+          <li class="spec-step">
+            <span class="spec-step-number">③</span>
+            <div class="spec-step-body">
+              <strong>巨戟アーティア武器の復元強化</strong>
+              <p><b>復元ボーナスカウンター</b>が1つ進みます（II・III・EXが付きます）。</p>
+              <p>「ボーナスをリセットして再復元」（5枠を全部引き直す）と「ボーナスを同じ構成で再復元」（系統はそのまま、段階だけ引き直す）のどちらでも1つ進みます。</p>
+              <p class="spec-caution">※ スキルカウンターは進みません。</p>
+              <p class="spec-tab-link">予測：<button type="button" class="text-button" data-goto-tab="bonus-future">04 復元ボーナス未来予測</button>／特定：<button type="button" class="text-button" data-goto-tab="search">02</button></p>
+            </div>
+          </li>
+          <li class="spec-side">
+            <strong>スキル再付与（いつでも）</strong>
+            <p><b>スキルカウンター</b>が1つ進みます。復元ボーナスカウンターは進みません。予測は<button type="button" class="text-button" data-goto-tab="skill-future">05</button>。</p>
+          </li>
+        </ol>
+      </section>
+
+      <section class="spec-block">
+        <h3>カウンターの一覧</h3>
+        <div class="spec-table-wrap">
+          <table class="spec-table">
+            <thead><tr><th>カウンター</th><th>何を決める？</th><th>何をすると1つ進む？</th><th>全武器で共通？</th></tr></thead>
+            <tbody>
+              <tr><th>基準seed</th><td>全部の抽選の元になる番号</td><td>進まない（セーブデータごとに決まっている）</td><td>共通</td></tr>
+              <tr><th>通常アーティアカウンター</th><td>通常アーティアの5枠（段階なし）</td><td>通常アーティア武器（レア8）を1本作る</td><td><b>武器種ごとに別</b>（同じ武器種なら属性あり・なしは共通）</td></tr>
+              <tr><th>スキルカウンター</th><td>巨戟のシリーズ・グループスキル</td><td>巨戟アーティア武器への強化／スキル再付与</td><td>全武器で共通</td></tr>
+              <tr><th>復元ボーナスカウンター</th><td>巨戟の復元ボーナス（II・III・EX付き）</td><td>巨戟アーティア武器の復元強化（リセット・同じ構成どちらも）</td><td>全武器で共通</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="spec-note">06・07では、通常アーティアカウンターのことを「作成カウンター」と表示しています。</p>
+      </section>
+
+      <section class="spec-block">
+        <h3>狙い方の例</h3>
+        <ul class="spec-list">
+          <li><b>系統だけ欲しい（例：攻撃×5）</b>：通常アーティアの方がずっと出やすいです。07で何本目に出るかを見て作ります。</li>
+          <li><b>系統＋EXが欲しい</b>：① 通常アーティアで系統を作る → ② 巨戟アーティア武器へ強化（系統は引き継がれる） → ③ 「同じ構成で再復元」でEXを狙う（04の手持ち武器で予測）。</li>
+          <li><b>スキルも狙う</b>：②の巨戟化でもスキルカウンターが進みます。05の予測を見て、欲しいスキルが出る回で巨戟化やスキル再付与をします。</li>
+          <li><b>途中の回を消化したいとき</b>：復元ボーナス・スキルのカウンターは全武器で共通なので、捨ててもいい武器で進めてもOKです。通常アーティアカウンターは武器種ごとなので、同じ武器種を作って進めます。</li>
+        </ul>
+      </section>
+
+      <section class="spec-block">
+        <h3>覚えておくこと</h3>
+        <ul class="spec-list">
+          <li>結果を確かめたあと<b>セーブせずにゲームを終了</b>すれば、カウンターは元に戻ります。</li>
+          <li>欲しい結果でセーブしたら、その行の「ここを0にする」を押すと、続きから予測できます。</li>
+          <li>タブの役割：02・03・06で<b>今のカウンターを特定</b> → 04・05・07で<b>先を予測</b> → 08で<b>手持ち武器を管理</b>。</li>
+        </ul>
+      </section>
+    </section>`;
+  firstView.before(view);
+}
+
+// 01 使い方の一番上に「改良版で増えた機能」
+function addForkGuideBox() {
+  const guide = document.querySelector('[data-tab-view="guide"]');
+  if (!guide) return;
+  const box = document.createElement("section");
+  box.className = "fork-guide-box";
+  box.innerHTML = `
+    <p class="step">FORK FEATURES</p>
+    <h3>改良版で増えた機能</h3>
+    <ul>
+      <li><button type="button" class="text-button" data-goto-tab="spec">00 仕組み</button>：カウンターが進む仕組みと、武器ができるまでの流れ</li>
+      <li><button type="button" class="text-button" data-goto-tab="bonus-future">04 復元ボーナス未来予測</button>：武器種ごとの希望、「次の一致」、手持ち武器の強化、通常アーティアとの比べ</li>
+      <li><button type="button" class="text-button" data-goto-tab="skill-future">05 スキル未来予測</button>：武器種ごとの条件、「一致」列、所持済みの印</li>
+      <li><button type="button" class="text-button" data-goto-tab="artian-search">06</button>・<button type="button" class="text-button" data-goto-tab="artian-future">07 通常アーティア</button>：カード入力、武器種一覧、武器種ごとの希望、「1本作った」、全武器種の次の当たり</li>
+      <li><button type="button" class="text-button" data-goto-tab="owned">08 手持ち武器</button>：持っている武器（今のボーナス・スキル）の登録と所持表</li>
+    </ul>`;
+  const panel = guide.querySelector(".panel") ?? guide.firstElementChild;
+  if (panel) panel.prepend(box);
+  else guide.prepend(box);
+}
 
 function createOwnedWeaponTab() {
   const nav = document.querySelector(".app-tabs");
@@ -2420,7 +2641,13 @@ function enhanceObservationRowWithCards(row) {
 
 // 5枠のボーナスをカードで選ぶ部品（左：1〜5枠目、右：系統ごとのカード）。
 // seed検索の結果入力と、手持ち武器の登録で使う
-function createBonusCardPicker({ weaponType, options, values, onChange, clearText = "5枠をクリア" }) {
+// 通常アーティアはボーナスの番号の付け方が違うので、系統・名前・EXかどうかの決め方を差し替えられる
+function createBonusCardPicker({
+  weaponType, options, values, onChange, clearText = "5枠をクリア",
+  classOf = bonusClassName,
+  nameOf = (bonusId) => gogmaBonusName(weaponType, bonusId),
+  isEx = (bonusId) => EX_BONUS_IDS.has(bonusId),
+}) {
   const current = Array.from({ length: 5 }, (_, index) => values?.[index] ?? null);
   const firstEmpty = current.findIndex((value) => value === null);
   let active = firstEmpty === -1 ? 0 : firstEmpty;
@@ -2451,9 +2678,9 @@ function createBonusCardPicker({ weaponType, options, values, onChange, clearTex
         chip.classList.add("empty");
         value.textContent = "未選択";
       } else {
-        value.classList.add("bonus-tag", bonusClassName(bonusId));
-        if (EX_BONUS_IDS.has(bonusId)) value.classList.add("ex");
-        value.textContent = gogmaBonusName(weaponType, bonusId);
+        value.classList.add("bonus-tag", classOf(bonusId));
+        if (isEx(bonusId)) value.classList.add("ex");
+        value.textContent = nameOf(bonusId);
       }
       chip.append(slotName, value);
       if (index === active) {
@@ -2504,16 +2731,16 @@ function createBonusCardPicker({ weaponType, options, values, onChange, clearTex
     const title = document.createElement("strong");
     const sub = document.createElement("span");
     card.type = "button";
-    card.className = `observation-card ${bonusClassName(bonusId)}${EX_BONUS_IDS.has(bonusId) ? " ex" : ""}`;
+    card.className = `observation-card ${classOf(bonusId)}${isEx(bonusId) ? " ex" : ""}`;
     card.dataset.bonusId = String(bonusId);
     mark.className = "observation-card-mark";
     title.textContent = name;
     sub.className = "observation-card-sub";
-    sub.textContent = EX_BONUS_IDS.has(bonusId) ? `${categoryLabel(bonusClassName(bonusId))}系・EX` : `${categoryLabel(bonusClassName(bonusId))}系`;
+    sub.textContent = isEx(bonusId) ? `${categoryLabel(classOf(bonusId))}系・EX` : `${categoryLabel(classOf(bonusId))}系`;
     text.append(title, sub);
     card.append(mark, text);
     cards.push(card);
-    columnFor(bonusClassName(bonusId)).append(card);
+    columnFor(classOf(bonusId)).append(card);
     card.addEventListener("click", () => {
       setValue(active, bonusId);
       const nextEmpty = current.findIndex((value, index) => index > active && value === null);
@@ -4498,7 +4725,8 @@ function renderBonusWishSummary() {
   list.className = "next-match-table";
   const head = document.createElement("thead");
   const headRow = document.createElement("tr");
-  for (const label of ["あと何回", "方法", "武器種・属性", "登録名", "希望", "結果（5枠）", "備考", "採用"]) {
+  // 「通常アーティアなら」：同じ系統の組み合わせを、通常アーティアを作って狙うなら何本目か（系統だけの比べ）
+  for (const label of ["あと何回", "方法", "武器種・属性", "登録名", "希望", "結果（5枠）", "通常アーティアなら", "備考", "採用"]) {
     const th = document.createElement("th");
     th.scope = "col";
     th.textContent = label;
@@ -4534,7 +4762,8 @@ function renderBonusWishSummary() {
       none.textContent = "表示範囲内に一致なし（表示する回数を増やしてください）";
       row.append(
         cell("next-when", "—"), cell("next-method", method), cell("next-weapon", weaponAndAttributeText(target)),
-        cell("next-label", target.label || "—"), cell("next-wish", wish), cell("next-result none-text", none), cell("next-note", ""),
+        cell("next-label", target.label || "—"), cell("next-wish", wish), cell("next-result none-text", none),
+        cell("next-artian", artianRouteText(target, count)), cell("next-note", ""),
         cell("next-action", ""),
       );
     } else {
@@ -4548,6 +4777,7 @@ function renderBonusWishSummary() {
         cell("next-when", `あと${hits[0] + 1}回`), cell("next-method", method), cell("next-weapon", weaponAndAttributeText(target)),
         cell("next-label", target.label || "—"), cell("next-wish", wish),
         cell("next-result", createCompactBonusSet(target, target.rolls[hits[0]], true)),
+        cell("next-artian", artianRouteText(target, count)),
         cell("next-note", others > 0 ? `同じ回にほか${others}武器も一致` : ""),
         cell("next-action", adoptButton),
       );
@@ -6535,17 +6765,27 @@ function artianBaseCounterForWeapon(weaponType) {
   return Number.isSafeInteger(value) && value >= 0 && value <= 1_000_000 ? value : null;
 }
 
+// 改良版：06・07 の一覧は押せるボタンにして、押すとその武器種を選ぶ（未特定は灰色）
 function createArtianCounterOverviewItems(highlightSelectedWeapon) {
   const selectedWeaponType = Number(artianBaseWeaponSelect.value);
   return WEAPON_TYPES.map(([weaponType, weaponName]) => {
       const counter = artianBaseCounterForWeapon(weaponType);
-      const item = document.createElement("div");
+      const item = document.createElement(highlightSelectedWeapon ? "button" : "div");
       const label = document.createElement("span");
       const value = document.createElement("strong");
       item.className = `artian-counter-overview-item${highlightSelectedWeapon && weaponType === selectedWeaponType ? " selected" : ""}${counter === null ? " unknown" : ""}`;
       label.textContent = t(weaponName);
       value.textContent = counter === null ? t("未特定") : counter.toLocaleString("ja-JP");
       item.append(label, value);
+      if (highlightSelectedWeapon) {
+        item.type = "button";
+        item.title = counter === null
+          ? `${weaponName}を選びます（まだカウンターが分かっていません）`
+          : `${weaponName}を選びます（作成カウンター ${counter.toLocaleString("ja-JP")}）`;
+        item.addEventListener("click", () => {
+          updateArtianTargetSelection(weaponType, Number(artianBaseAttributeSelect.value));
+        });
+      }
       return item;
     });
 }
@@ -6553,6 +6793,7 @@ function createArtianCounterOverviewItems(highlightSelectedWeapon) {
 function renderArtianCounterOverview() {
   artianCounterOverviewGrid.replaceChildren(...createArtianCounterOverviewItems(true));
   saveStateArtianCounterOverviewGrid.replaceChildren(...createArtianCounterOverviewItems(false));
+  if (artianSearchOverviewGrid) artianSearchOverviewGrid.replaceChildren(...createArtianCounterOverviewItems(true));
 }
 
 function renderArtianBaseState() {
@@ -6581,6 +6822,8 @@ function renderArtianBaseState() {
     artianBaseStatus.textContent = `作成カウンター ${counter.toLocaleString("ja-JP")}から予測`;
     artianBaseStatus.className = "status-pill complete";
   }
+  // 改良版：全武器種の次の当たり
+  renderArtianNextList();
 }
 
 function renderArtianWeaponVerification() {
@@ -6675,46 +6918,16 @@ function artianBaseBonusClassName(bonusId) {
   return "sharpness-ammo";
 }
 
-function renderArtianBaseFilters(values = []) {
-  const weaponType = Number(artianBaseWeaponSelect.value);
-  const bonuses = artianBasePool(weaponType, currentArtianAttributeForce()).ids.map((bonusId) => [
-    bonusId,
-    artianBaseBonusName(weaponType, bonusId),
-  ]);
-
-  artianFilterGrid.replaceChildren(
-    ...Array.from({ length: 5 }, (_, index) => {
-      const label = document.createElement("label");
-      const text = document.createElement("span");
-      const select = document.createElement("select");
-      const placeholder = document.createElement("option");
-      const selectedId = values[index] ?? null;
-      const selectedIdIsAvailable = bonuses.some(([bonusId]) => bonusId === selectedId);
-
-      text.textContent = `希望 ${index + 1}`;
-      placeholder.value = "";
-      placeholder.textContent = "指定なし";
-      placeholder.selected = selectedId === null || !selectedIdIsAvailable;
-      select.append(placeholder);
-
-      for (const [bonusId, name] of bonuses) {
-        const option = document.createElement("option");
-        option.value = String(bonusId);
-        option.textContent = name;
-        option.selected = selectedId === bonusId;
-        select.append(option);
-      }
-
-      label.append(text, select);
-      return label;
-    }),
-  );
+// 改良版：希望1〜5のプルダウンの代わりに、武器種ごとに覚える「系統の数」のカード（renderArtianWishCards）
+function renderArtianBaseFilters() {
+  renderArtianWishCards();
 }
 
+// 希望を、通常アーティアのボーナス番号の並び（例：攻撃×4＋属性×1 → [4,4,4,4,6]）にする
 function snapshotArtianBaseFilters() {
-  return [...artianFilterGrid.querySelectorAll("select")].map((select) =>
-    select.value === "" ? null : Number(select.value),
-  );
+  const { counts } = artianWishFor(Number(artianBaseWeaponSelect.value));
+  return counts.flatMap((count, category) =>
+    Array.from({ length: count }, () => ARTIAN_ID_BY_CATEGORY.get(category)));
 }
 
 function visibleArtianBaseRolls() {
@@ -6764,11 +6977,22 @@ function createArtianBaseRow(roll, index) {
   beforeCounterCell.className = "artian-counter-cell";
   beforeCounterCell.textContent = roll.counter.toLocaleString("ja-JP");
   row.append(offsetCell, beforeCounterCell, createArtianSavedStateCell(index + 1));
+  // 改良版：基礎攻撃力はいつも、希望に当てはまる枠も、金の縁で強調。希望どおりの行は金色の帯
+  const { counts } = artianWishFor(Number(artianBaseWeaponSelect.value));
+  const need = [...counts];
+  if (artianRollMeetsCounts(roll.bonusIds, counts)) row.classList.add("prediction-match", "artian-wish-row");
   for (const bonusId of roll.bonusIds) {
     const cell = document.createElement("td");
     const tag = document.createElement("span");
     tag.className = `bonus-tag ${artianBaseBonusClassName(bonusId)}`;
     tag.textContent = artianBaseBonusName(Number(artianBaseWeaponSelect.value), bonusId);
+    const category = ARTIAN_CATEGORY_BY_ID.get(bonusId);
+    if (need[category] > 0) {
+      need[category] -= 1;
+      tag.classList.add("wish-part");
+    } else if (bonusId === 4) {
+      tag.classList.add("wish-part");
+    }
     cell.append(tag);
     row.append(cell);
   }
@@ -6862,13 +7086,34 @@ function createArtianObservationRow(values = null) {
     label.append(accessibleLabel, select);
     row.append(label);
   }
+  // 改良版：プルダウンの代わりにカードで入力する（プルダウンは隠して値の入れ物として残す）
+  row.classList.add("card-input");
+  const selects = [...row.querySelectorAll("select")];
+  const weaponType = Number(artianBaseWeaponSelect.value);
+  const allowedIds = new Set(artianBasePool(weaponType, currentArtianAttributeForce()).ids);
+  const picker = createBonusCardPicker({
+    weaponType,
+    options: ARTIAN_BASE_BONUSES
+      .filter(([bonusId]) => allowedIds.has(bonusId))
+      .map(([bonusId]) => [bonusId, artianBaseBonusName(weaponType, bonusId)]),
+    values: selects.map((select) => select.value === "" ? null : Number(select.value)),
+    clearText: "この1本をクリア",
+    classOf: artianBaseBonusClassName,
+    nameOf: (bonusId) => artianBaseBonusName(weaponType, bonusId),
+    isEx: () => false,
+    onChange: (index, bonusId) => {
+      selects[index].value = bonusId === null ? "" : String(bonusId);
+      selects[index].dispatchEvent(new Event("change", { bubbles: true }));
+    },
+  });
+  row.append(picker.element);
   return row;
 }
 
 function renumberArtianObservationRows() {
   const rows = [...artianObservationRows.querySelectorAll(".artian-observation-row")];
   rows.forEach((row, rollIndex) => {
-    row.querySelector(".roll-number").textContent = `作成 ${rollIndex + 1}`;
+    row.querySelector(".roll-number").textContent = `${rollIndex + 1}本目に作った武器`;
     row.querySelectorAll(".slot-label").forEach((label, slotIndex) => {
       label.textContent = `${slotIndex + 1}枠目`;
       label.parentElement.querySelector("select").setAttribute(
@@ -7027,4 +7272,346 @@ function showArtianSearchError(message) {
 function hideArtianSearchError() {
   artianSearchError.textContent = "";
   artianSearchError.hidden = true;
+}
+
+// ===== 改良版：通常アーティア（06・07）の使い勝手 =====
+
+
+// 起動時に一度だけ：06の武器一覧・全部クリア・元に戻す、07の「1本作った」と「全武器種の次の当たり」
+function setupArtianEnhancements() {
+  // 06：観測した通常アーティア武器の上に、特定済み・未特定の武器一覧
+  const searchTarget = document.querySelector("#artian-search-target-title")?.closest("section");
+  if (searchTarget) {
+    const box = document.createElement("section");
+    box.className = "artian-weapon-picker";
+    const title = document.createElement("h3");
+    title.textContent = "武器種ごとの作成カウンター（押すとその武器種を選びます）";
+    const note = document.createElement("p");
+    note.textContent = "明るい武器種は特定済み（数字が今のカウンター）、灰色は未特定です。";
+    artianSearchOverviewGrid = document.createElement("div");
+    artianSearchOverviewGrid.className = "artian-counter-overview-grid artian-clickable-grid";
+    box.append(title, note, artianSearchOverviewGrid);
+    searchTarget.before(box);
+  }
+  // 07の一覧も押せるので、その案内を添える
+  const overviewHeading = document.querySelector(".artian-counter-overview-heading small");
+  if (overviewHeading) overviewHeading.textContent = "属性・無属性で共通（レア8）。押すとその武器種を選びます";
+
+  // 06：全部クリアのボタンと、空にしたあとの「元に戻す」
+  const controls = removeArtianObservationButton?.parentElement;
+  if (controls) {
+    const clearAll = document.createElement("button");
+    clearAll.type = "button";
+    clearAll.className = "text-button";
+    clearAll.textContent = "入力した結果をすべてクリア";
+    clearAll.addEventListener("click", () => clearArtianObservations(""));
+    controls.append(clearAll);
+    const undo = document.createElement("p");
+    undo.className = "artian-undo";
+    undo.hidden = true;
+    controls.after(undo);
+  }
+  // 「このカウンターで未来予測へ」を押したら、次の武器種のために入力を空にする
+  openArtianFutureFromSearchButton?.addEventListener("click", () => {
+    clearArtianObservations("未来予測へ進んだので、");
+  });
+
+  // 07：「1本作った」ボタン（その武器種のカウンターを1つ進める）
+  const applyButton = applyArtianBaseCounterButton;
+  if (applyButton) {
+    const made = document.createElement("button");
+    made.type = "button";
+    made.className = "secondary small-button";
+    made.id = "artian-made-one";
+    made.textContent = "1本作った（カウンターを1つ進める）";
+    made.title = "ゲームでこの武器種の通常アーティアを1本作ったら押します";
+    made.addEventListener("click", () => {
+      if (currentArtianBaseCounter() === null) {
+        showArtianBaseError("先にこの武器種の作成カウンターを入力するか、06で特定してください。");
+        return;
+      }
+      adoptArtianBasePosition(1);
+    });
+    applyButton.after(made);
+  }
+
+  // 07：希望の説明を、カード式（武器種ごとに覚える）に合わせて書き直す
+  const wishDescription = document.querySelector(".artian-result-filter .prediction-filter-heading p");
+  if (wishDescription) {
+    wishDescription.textContent = "欲しい系統の数を、−／＋で決めます（順不同）。武器種ごとに覚えるので、武器種を切り替えるとその武器種の希望が出ます。まだ決めていない武器種は、04の「狙いの希望」が最初に入ります。基礎攻撃力と、希望に当てはまる枠は金の縁で強調します。";
+  }
+
+  // 07：全武器種の次の当たり
+  const results = document.querySelector(".artian-results");
+  if (results) {
+    artianNextList = document.createElement("section");
+    artianNextList.className = "artian-next-list";
+    results.before(artianNextList);
+  }
+}
+
+// 06の入力を空にする（元に戻せる）。reason は「武器種を変えたので、」など
+function clearArtianObservations(reason) {
+  const current = snapshotArtianObservationValues();
+  if (current.every((roll) => roll.every((value) => value === null))) return;
+  // 元に戻すときは、入力していたときの武器種・属性の有無にも戻す
+  artianObservationUndo = {
+    values: current,
+    weaponType: Number(artianBaseWeaponSelect.value),
+    attributeForce: Number(artianBaseAttributeSelect.value),
+  };
+  renderArtianObservationRows(Array.from({ length: 3 }, () => null));
+  clearArtianCounterSearchFeedback();
+  const notice = document.querySelector(".artian-undo");
+  if (!notice) return;
+  const text = document.createElement("span");
+  text.textContent = `${reason}入力した作成結果を空にしました。`;
+  const undoButton = document.createElement("button");
+  undoButton.type = "button";
+  undoButton.className = "secondary small-button";
+  undoButton.textContent = "元に戻す";
+  undoButton.addEventListener("click", () => {
+    const saved = artianObservationUndo;
+    artianObservationUndo = null;
+    notice.hidden = true;
+    if (!saved) return;
+    // 武器種を先に戻してから（同じ武器種なので入力は消えない）、入力を戻す
+    artianBaseWeaponSelect.value = String(saved.weaponType);
+    updateArtianTargetSelection(saved.weaponType, saved.attributeForce);
+    renderArtianObservationRows(saved.values);
+  });
+  notice.replaceChildren(text, undoButton);
+  notice.hidden = false;
+}
+
+// 07の希望（武器種ごと）。まだ決めていない武器種は、04の「狙いの希望」を最初の値にする
+function artianWishFor(weaponType) {
+  const saved = artianWishes[weaponType];
+  if (saved && Array.isArray(saved.counts)) {
+    return {
+      counts: [0, 1, 2, 3].map((category) => Math.max(0, Math.min(5, Math.trunc(Number(saved.counts[category]) || 0)))),
+      attr: saved.attr === 0 ? 0 : 1,
+    };
+  }
+  return { counts: wishCategoryCounts(weaponType).counts, attr: BOWGUN_WEAPON_TYPES.has(weaponType) ? 0 : 1 };
+}
+
+// 04の狙いの希望を、系統の数だけにしたもの。EX・III以上の指定があれば needsTier=true（通常アーティアでは出ない）
+function wishCategoryCounts(weaponType) {
+  const wish = bonusWishFor(weaponType);
+  if (wish.mode !== "slots") return { counts: [...wish.counts], needsTier: false };
+  const counts = [0, 0, 0, 0];
+  let needsTier = false;
+  for (const slot of activeWishSlots(wish)) {
+    if (slot.c >= 0) counts[slot.c] += 1;
+    if (slot.lv > 0) needsTier = true;
+  }
+  return { counts, needsTier };
+}
+
+function persistArtianWishes() {
+  try {
+    localStorage.setItem(ARTIAN_WISHES_KEY, JSON.stringify(artianWishes));
+  } catch {
+    // The app remains usable when storage is unavailable.
+  }
+}
+
+function artianCategoryName(weaponType, category) {
+  if (category === 0) return "攻撃";
+  if (category === 1) return "会心";
+  if (category === 2) return "属性";
+  return BOWGUN_WEAPON_TYPES.has(weaponType) ? "装填" : "斬れ味";
+}
+
+function artianWishText(weaponType, counts) {
+  const parts = [0, 2, 3, 1]
+    .filter((category) => counts[category] > 0)
+    .map((category) => `${artianCategoryName(weaponType, category)}×${counts[category]}`);
+  return parts.length > 0 ? parts.join("＋") : "指定なし";
+}
+
+// 結果の5枠が希望の系統の数を満たすか（順不同）
+function artianRollMeetsCounts(bonusIds, counts) {
+  if (counts.every((count) => count === 0)) return false;
+  const have = [0, 0, 0, 0];
+  for (const bonusId of bonusIds) {
+    const category = ARTIAN_CATEGORY_BY_ID.get(bonusId);
+    if (category !== undefined) have[category] += 1;
+  }
+  return counts.every((need, category) => have[category] >= need);
+}
+
+// 07の「希望する復元ボーナス」をカードで（系統ごとに −／＋ で数を決める）
+function renderArtianWishCards() {
+  const weaponType = Number(artianBaseWeaponSelect.value);
+  const pool = artianBasePool(weaponType, currentArtianAttributeForce());
+  const wish = artianWishFor(weaponType);
+  const total = wish.counts.reduce((sum, count) => sum + count, 0);
+  const save = (counts) => {
+    artianWishes[weaponType] = { counts, attr: currentArtianAttributeForce() === 0 ? 0 : 1 };
+    persistArtianWishes();
+    renderArtianWishCards();
+    resetTablePage("artianBase");
+    renderArtianBaseTable();
+    renderArtianNextList();
+  };
+  const cards = pool.ids.map((bonusId) => {
+    const category = ARTIAN_CATEGORY_BY_ID.get(bonusId);
+    const cap = pool.caps.get(bonusId) ?? 5;
+    const card = document.createElement("div");
+    card.className = `artian-wish-card ${artianBaseBonusClassName(bonusId)}${wish.counts[category] > 0 ? " active" : ""}`;
+    const name = document.createElement("strong");
+    name.textContent = artianCategoryName(weaponType, category);
+    const minus = document.createElement("button");
+    const plus = document.createElement("button");
+    const value = document.createElement("span");
+    minus.type = "button";
+    plus.type = "button";
+    minus.textContent = "−";
+    plus.textContent = "＋";
+    minus.setAttribute("aria-label", `${name.textContent}を1つ減らす`);
+    plus.setAttribute("aria-label", `${name.textContent}を1つ増やす`);
+    value.className = "artian-wish-count";
+    value.textContent = wish.counts[category] > 0 ? `×${wish.counts[category]}` : "—";
+    minus.disabled = wish.counts[category] === 0;
+    plus.disabled = wish.counts[category] >= cap || total >= 5;
+    minus.addEventListener("click", () => {
+      const counts = [...wish.counts];
+      counts[category] -= 1;
+      save(counts);
+    });
+    plus.addEventListener("click", () => {
+      const counts = [...wish.counts];
+      counts[category] += 1;
+      save(counts);
+    });
+    const stepper = document.createElement("div");
+    stepper.className = "artian-wish-stepper";
+    stepper.append(minus, value, plus);
+    const capNote = document.createElement("small");
+    capNote.textContent = `最大${cap}枠`;
+    card.append(name, stepper, capNote);
+    return card;
+  });
+  const footer = document.createElement("div");
+  footer.className = "artian-wish-footer";
+  const summary = document.createElement("span");
+  summary.textContent = `希望：${artianWishText(weaponType, wish.counts)}（合計 ${total} / 5枠）`;
+  const clear = document.createElement("button");
+  clear.type = "button";
+  clear.className = "text-button";
+  clear.textContent = "この武器種の希望をクリア";
+  clear.addEventListener("click", () => save([0, 0, 0, 0]));
+  footer.append(summary, clear);
+  artianFilterGrid.classList.add("artian-wish-grid");
+  artianFilterGrid.replaceChildren(...cards, footer);
+}
+
+// 07：カウンターと希望が分かっている武器種について、次の当たりを近い順に並べる
+function renderArtianNextList() {
+  if (!artianNextList) return;
+  const count = Math.max(1, Math.min(10_000, Math.trunc(Number(artianBaseCountInput.value)) || 100));
+  const heading = document.createElement("div");
+  heading.className = "section-heading compact-heading";
+  heading.innerHTML = '<div><p class="step">NEXT HITS</p><h3>全武器種の次の当たり</h3></div>';
+  const note = document.createElement("p");
+  note.className = "prediction-intro";
+  note.textContent = `作成カウンターが分かっていて、希望を決めた武器種について、${count.toLocaleString("ja-JP")}本先までの中で一番近い当たりを並べます。武器種を押すと、その武器種の予測を開きます。`;
+  if (saveState.baseSeed === null) {
+    artianNextList.replaceChildren(heading, note);
+    return;
+  }
+  const rows = [];
+  const noCounter = [];
+  const noWish = [];
+  for (const [weaponType, weaponName] of WEAPON_TYPES) {
+    const counter = artianBaseCounterForWeapon(weaponType);
+    const wish = artianWishFor(weaponType);
+    if (counter === null) { noCounter.push(weaponName); continue; }
+    if (wish.counts.every((value) => value === 0)) { noWish.push(weaponName); continue; }
+    const attr = BOWGUN_WEAPON_TYPES.has(weaponType) ? 0 : wish.attr;
+    const rolls = predictArtianBaseRolls(saveState.baseSeed, weaponType, ARTIAN_R8_ENUM, attr, counter, count);
+    const index = rolls.findIndex((roll) => artianRollMeetsCounts(roll.bonusIds, wish.counts));
+    rows.push({ weaponType, weaponName, attr, wish, index, roll: rolls[index] });
+  }
+  rows.sort((a, b) => (a.index < 0 ? Infinity : a.index) - (b.index < 0 ? Infinity : b.index));
+  const table = document.createElement("table");
+  table.className = "next-match-table artian-next-table";
+  table.innerHTML = "<thead><tr><th>あと何本</th><th>武器種</th><th>属性</th><th>希望</th><th>結果（5枠）</th><th></th></tr></thead>";
+  const body = document.createElement("tbody");
+  for (const row of rows) {
+    const tr = document.createElement("tr");
+    if (row.index < 0) tr.classList.add("none");
+    const cells = [
+      row.index < 0 ? "—" : `あと${row.index + 1}本`,
+      row.weaponName,
+      row.attr === 0 ? "無属性" : "属性あり",
+      artianWishText(row.weaponType, row.wish.counts),
+    ].map((text, i) => {
+      const td = document.createElement("td");
+      td.className = ["next-when", "next-weapon", "", "next-wish"][i];
+      td.textContent = text;
+      return td;
+    });
+    const result = document.createElement("td");
+    if (row.index < 0) {
+      result.textContent = `${count.toLocaleString("ja-JP")}本以内になし（表示する本数を増やしてください）`;
+    } else {
+      const tags = document.createElement("div");
+      tags.className = "artian-mini-tags";
+      for (const bonusId of row.roll.bonusIds) {
+        const tag = document.createElement("span");
+        tag.className = `bonus-tag compact ${artianBaseBonusClassName(bonusId)}`;
+        tag.textContent = artianBaseBonusName(row.weaponType, bonusId).replace("強化", "");
+        tags.append(tag);
+      }
+      result.append(tags);
+    }
+    const open = document.createElement("td");
+    const openButton = document.createElement("button");
+    openButton.type = "button";
+    openButton.className = "secondary small-button";
+    openButton.textContent = "この武器種を開く";
+    openButton.addEventListener("click", () => updateArtianTargetSelection(row.weaponType, row.attr));
+    open.append(openButton);
+    tr.append(...cells, result, open);
+    body.append(tr);
+  }
+  table.append(body);
+  const children = [heading, note];
+  if (rows.length > 0) {
+    const wrap = document.createElement("div");
+    wrap.className = "artian-next-wrap";
+    wrap.append(table);
+    children.push(wrap);
+  } else {
+    const empty = document.createElement("p");
+    empty.className = "empty-result";
+    empty.textContent = "まだ表示できる武器種がありません。06で作成カウンターを特定し、下の「希望する復元ボーナス」を決めると、ここに並びます。";
+    children.push(empty);
+  }
+  const rest = document.createElement("p");
+  rest.className = "artian-next-rest";
+  rest.textContent = [
+    noCounter.length > 0 ? `カウンター未特定：${noCounter.join("・")}` : "",
+    noWish.length > 0 ? `希望未設定：${noWish.join("・")}` : "",
+  ].filter(Boolean).join("　／　");
+  if (rest.textContent) children.push(rest);
+  artianNextList.replaceChildren(...children);
+}
+
+// 04の「次の一致」用：その狙いの武器種を通常アーティアで作るなら、あと何本か
+function artianRouteText(target, count) {
+  if (target.kind === "owned") return "—";
+  const { counts, needsTier } = wishCategoryCounts(target.weaponType);
+  if (needsTier) return "EX・III指定があるので対象外";
+  if (counts.every((value) => value === 0)) return "—";
+  if (saveState.baseSeed === null) return "—";
+  const counter = artianBaseCounterForWeapon(target.weaponType);
+  if (counter === null) return "カウンター未特定（06で特定）";
+  const attr = BOWGUN_WEAPON_TYPES.has(target.weaponType) || target.attributeForce === 0 ? 0 : 1;
+  const rolls = predictArtianBaseRolls(saveState.baseSeed, target.weaponType, ARTIAN_R8_ENUM, attr, counter, count);
+  const index = rolls.findIndex((roll) => artianRollMeetsCounts(roll.bonusIds, counts));
+  return index < 0 ? `${count.toLocaleString("ja-JP")}本以内になし` : `あと${index + 1}本`;
 }
