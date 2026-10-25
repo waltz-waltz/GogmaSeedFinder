@@ -596,6 +596,8 @@ document.head.append(Object.assign(document.createElement("style"), {
     .skill-adopt-cancel { justify-self: end; margin-top: 4px; color: #ffffff; }
     .skill-adopt-heading { margin: 0; color: #ffe39a; font-size: 0.82rem; font-weight: 800; }
     .skill-adopt-summary .comparison-bonus-set { grid-template-columns: repeat(5, auto); }
+    .skill-adopt-detail-rich { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+    .skill-adopt-detail-rich .comparison-bonus-set { grid-template-columns: repeat(5, auto); }
     .skill-adopt-menu p { margin: 0 0 2px; color: #ffe39a; font-size: 0.78rem; font-weight: 800; }
     .skill-adopt-choice { padding: 6px 10px; border: 1px solid #5a5236; border-radius: 6px; background: #26271f; color: #f2eddc; font-size: 0.78rem; text-align: left; cursor: pointer; }
     .skill-adopt-choice:hover { border-color: #e8c766; background: #322f22; }
@@ -5076,10 +5078,14 @@ function openAdoptDialog({ title, summary = [], note, heading, choices }) {
     nameEl.textContent = name;
     item.append(nameEl);
     if (detail) {
-      const detailEl = document.createElement("span");
-      detailEl.className = "skill-adopt-detail";
-      detailEl.textContent = detail;
-      item.append(detailEl);
+      if (detail instanceof Node) {
+        item.append(detail);
+      } else {
+        const detailEl = document.createElement("span");
+        detailEl.className = "skill-adopt-detail";
+        detailEl.textContent = detail;
+        item.append(detailEl);
+      }
     }
     item.addEventListener("click", () => {
       close();
@@ -5107,6 +5113,35 @@ function ownedWeaponDetailText(weapon) {
   ].join("｜");
 }
 
+// 今のボーナスを、結果の表と同じタグ（攻EX・会II など）で並べる。分からないときは文字
+function createOwnedBonusChips(weapon) {
+  if (ownedBonusesEmpty(weapon)) {
+    const none = document.createElement("span");
+    none.textContent = "未入力";
+    return none;
+  }
+  if (!ownedBonusesKnown(weapon)) {
+    const text = document.createElement("span");
+    text.textContent = ownedLayoutText(weapon);
+    return text;
+  }
+  return createCompactBonusSet({ ...weapon, kind: "reset" }, weapon.bonuses);
+}
+
+// 窓の「どの手持ち武器か」の説明：文字の説明の下に、今のボーナスをタグで並べる
+function ownedWeaponDetailNode(weapon) {
+  const box = document.createElement("span");
+  box.className = "skill-adopt-detail skill-adopt-detail-rich";
+  const text = document.createElement("span");
+  text.textContent = [
+    `${weaponAndAttributeText(weapon)}・${weapon.boost || "激化未設定"}`,
+    `今のスキル：${ownedSkillText(weapon) || "未登録"}`,
+    "今のボーナス：",
+  ].join("｜");
+  box.append(text, createOwnedBonusChips(weapon));
+  return box;
+}
+
 function createAdoptAsOwnedButton(target, bonusIds, completedRolls) {
   const button = document.createElement("button");
   button.type = "button";
@@ -5127,7 +5162,7 @@ function createAdoptAsOwnedButton(target, bonusIds, completedRolls) {
         ...sameKind.map((weapon) => ({
           tag: "上書き",
           name: comparisonTargetName(weapon),
-          detail: ownedWeaponDetailText(weapon),
+          detail: ownedWeaponDetailNode(weapon),
           onChoose: () => adoptResetToOwned(weapon, bonusIds, completedRolls),
         })),
         ...OWNED_BOOST_OPTIONS.map(([boost]) => ({
@@ -5187,18 +5222,23 @@ function createAdoptOwnedUpdateButton(target, bonusIds, completedRolls) {
   button.addEventListener("click", () => {
     const weapon = ownedWeapons.find((candidate) => candidate.id === target.id);
     if (!weapon) return;
-    const before = document.createElement("span");
-    before.className = "skill-adopt-detail";
-    before.textContent = `今：${ownedBonusesEmpty(weapon) ? "未入力" : ownedLayoutText(weapon)}　→　新しく：`;
+    // 「今」と「新しく」を同じタグで並べて、見比べやすくする
+    const nowLabel = document.createElement("span");
+    nowLabel.className = "skill-adopt-detail";
+    nowLabel.textContent = "今：";
+    const arrow = document.createElement("span");
+    arrow.className = "skill-adopt-detail";
+    arrow.textContent = "→　新しく：";
+    const nowChips = createOwnedBonusChips(weapon);
     openAdoptDialog({
       title: `${completedRolls}回先の復元ボーナスで手持ち武器を更新`,
-      summary: [...createWeaponBadge(target), before, createCompactBonusSet(target, bonusIds)],
+      summary: [...createWeaponBadge(target), nowLabel, nowChips, arrow, createCompactBonusSet(target, bonusIds)],
       note: `「${comparisonTargetName(weapon)}」の今のボーナスを書き換えて、復元ボーナスカウンターの0地点を${completedRolls}回先まで進めます。`,
       heading: "反映してよいですか？",
       choices: [{
-        tag: "反映",
+        tag: "手持ち武器",
         name: `${comparisonTargetName(weapon)} を更新する`,
-        detail: ownedWeaponDetailText(weapon),
+        detail: ownedWeaponDetailNode(weapon),
         onChoose: () => adoptOwnedUpdate(target, bonusIds, completedRolls),
       }],
     });
@@ -6636,7 +6676,7 @@ function createSkillAdoptButton(target, roll, completedRolls) {
         ...sameKind.map((weapon) => ({
           tag: "上書き",
           name: comparisonTargetName(weapon),
-          detail: ownedWeaponDetailText(weapon),
+          detail: ownedWeaponDetailNode(weapon),
           onChoose: () => adoptSkillToOwned(weapon, roll, completedRolls),
         })),
         ...OWNED_BOOST_OPTIONS.map(([boost]) => ({
