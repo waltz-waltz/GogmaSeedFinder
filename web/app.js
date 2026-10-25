@@ -807,6 +807,10 @@ document.head.append(Object.assign(document.createElement("style"), {
     .owned-rule-controls { display: grid; grid-template-columns: minmax(0, 420px) minmax(0, 160px); gap: 8px; }
     .owned-rule-controls label { display: grid; gap: 4px; font-size: 0.76rem; font-weight: 700; }
     .owned-rule-controls label[hidden] { display: none; }
+    .owned-rule-controls .owned-keep-attack { grid-column: 1 / -1; display: flex; gap: 8px; align-items: center; font-size: 0.8rem; font-weight: 800; color: #ffe39a; cursor: pointer; }
+    .owned-rule-controls .owned-keep-attack input { width: 18px; height: 18px; min-height: 0; margin: 0; accent-color: #e8c766; flex: none; }
+    .next-match-details { margin: 0 0 16px; }
+    .bonus-wish-min-attack { display: grid; gap: 4px; max-width: 360px; margin: 10px 0; font-size: 0.8rem; font-weight: 800; color: #ffe39a; }
     .owned-rule-controls select { height: 38px; }
     /* 一致の条件をまとめて設定 */
     .owned-bulk-rule { display: grid; gap: 10px; padding: 4px 0 6px; }
@@ -1248,6 +1252,7 @@ let weaponSkillFilters = loadWeaponSkillFilters();
 let weaponFilterSection = null;
 let bonusWishSection = null;
 let bonusWishSummary = null;
+let bonusWishDetails = null;
 let bonusWishMatchesOnly = null;
 let selectedSkillCounter = null;
 let skillObservedCount = 0;
@@ -3134,7 +3139,10 @@ function saveDetailFilters() {
     for (const category of values) counts[category] += 1;
     // ここで決めた希望は「系統の数」として保存する（5枠指定の中身は残しておく）
     const slots = bonusWishes[weaponType]?.slots;
-    if (counts.some((count) => count > 0) || slots) bonusWishes[weaponType] = { mode: "counts", counts, slots };
+    const minAttackEx = bonusWishes[weaponType]?.minAttackEx ?? 0;
+    if (counts.some((count) => count > 0) || slots || minAttackEx > 0) {
+      bonusWishes[weaponType] = { mode: "counts", counts, slots, minAttackEx };
+    }
     else delete bonusWishes[weaponType];
     persistBonusWishes();
     renderBonusWishSection();
@@ -4162,7 +4170,16 @@ function ownedBonusesKnown(weapon) {
 }
 
 // 手持ち武器の判定。「同じ構成で再復元」は枠ごとの系統が変わらないので、枠ごとに段階を比べられる
+// 攻撃系の枠の強さの合計（II=1・III=2・EX=3）。「攻撃は下げない」の判定に使う
+function attackTierPoints(bonusIds) {
+  return bonusIds.reduce((sum, bonusId) =>
+    sum + (bonusId !== null && bonusCategoryId(bonusId) === 0 ? bonusTierRank(bonusId) : 0), 0);
+}
+
 function ownedRollMatches(weapon, bonusIds) {
+  // 攻撃は下げない：今のボーナスが分かる武器は、攻撃の枠の強さの合計が下がる結果を一致にしない
+  if (weapon.keepAttack !== false && ownedBonusesKnown(weapon)
+    && attackTierPoints(bonusIds) < attackTierPoints(weapon.bonuses)) return false;
   if (weapon.rule === "ex" || !ownedBonusesKnown(weapon)) {
     return weapon.rule === "ex" && weapon.minEx > 0
       && bonusIds.filter((bonusId) => EX_BONUS_IDS.has(bonusId)).length >= weapon.minEx;
@@ -4174,9 +4191,10 @@ function ownedRollMatches(weapon, bonusIds) {
 }
 
 function ownedRuleText(weapon) {
-  if (weapon.rule === "ex") return `EX ${weapon.minEx}個以上`;
+  const keep = weapon.keepAttack !== false && ownedBonusesKnown(weapon) ? "・攻撃は下げない" : "";
+  if (weapon.rule === "ex") return `EX ${weapon.minEx}個以上${keep}`;
   if (!ownedBonusesKnown(weapon)) return "今のボーナスを入れると判定できます";
-  return weapon.rule === "total" ? "合計で今より強い" : "今より強い（上位互換）";
+  return `${weapon.rule === "total" ? "合計で今より強い" : "今より強い（上位互換）"}${keep}`;
 }
 
 function persistBonusWishes() {
@@ -4209,6 +4227,8 @@ function bonusWishFor(weaponType) {
     counts: BONUS_WISH_MAX.map((max, category) =>
       Math.max(0, Math.min(max, Math.trunc(Number(entry?.counts?.[category]) || 0)))),
     slots: normalizeWishSlots(entry?.slots),
+    // 攻撃EXは最低○個（0＝指定なし）。攻撃が下がる結果を一致にしないための条件
+    minAttackEx: Math.max(0, Math.min(5, Math.trunc(Number(entry?.minAttackEx) || 0))),
   };
 }
 
@@ -4222,9 +4242,14 @@ function activeWishSlots(wish) {
 }
 
 function bonusWishActive(wish) {
+  if (wish.minAttackEx > 0) return true;
   return wish.mode === "slots"
     ? activeWishSlots(wish).length > 0
     : bonusWishTotal(wish) > 0;
+}
+
+function attackExCount(bonusIds) {
+  return bonusIds.filter((bonusId) => EX_BONUS_IDS.has(bonusId) && bonusCategoryId(bonusId) === 0).length;
 }
 
 function bonusFitsSlot(bonusId, slot) {
@@ -4283,6 +4308,14 @@ function targetWishText(target) {
 }
 
 function bonusWishText(weaponType) {
+  const base = bonusWishBaseText(weaponType);
+  const wish = bonusWishFor(weaponType);
+  if (wish.minAttackEx <= 0) return base;
+  const extra = `攻撃EX${wish.minAttackEx}個以上`;
+  return base === "指定なし" ? extra : `${base}＋${extra}`;
+}
+
+function bonusWishBaseText(weaponType) {
   const wish = bonusWishFor(weaponType);
   if (wish.mode === "slots") {
     // 同じ指定はまとめる（例：攻撃EX×2＋攻撃×2＋属性EX）
@@ -4304,9 +4337,13 @@ function bonusWishText(weaponType) {
 function rollMatchesBonusWish(target, bonusIds) {
   if (target.kind === "owned") return ownedRollMatches(target, bonusIds);
   const wish = bonusWishFor(target.weaponType);
+  if (attackExCount(bonusIds) < wish.minAttackEx) return false;
+  const hasBase = wish.mode === "slots" ? activeWishSlots(wish).length > 0 : bonusWishTotal(wish) > 0;
+  // 攻撃EXの最低数だけが決まっているときは、それだけで判定する
+  if (!hasBase) return wish.minAttackEx > 0;
   if (wish.mode === "slots") return slotWishAssignment(wish, bonusIds).matched;
   const total = bonusWishTotal(wish);
-  if (total === 0 || total > 5) return false;
+  if (total > 5) return false;
   const counts = [0, 0, 0, 0];
   for (const bonusId of bonusIds) counts[bonusCategoryId(bonusId)] += 1;
   return wish.counts.every((need, category) => counts[category] >= need);
@@ -4413,7 +4450,14 @@ function setupComparisonFrames() {
   step2.append(bonusWishSection);
 
   const step3 = createStep("3", "結果を見る",
-    "まず「次の一致」で、どの武器があと何回で希望どおりになるかを確認します。その下の表は、何回先ごとの詳しい結果です。");
+    "「次の一致」（どの武器があと何回で希望どおりになるか）は、このタブの一番上にあります。この下の表は、何回先ごとの詳しい結果です。");
+  // 「次の一致」はよく見るので、タブの一番上に出し、開け閉めできるようにする（最初は開いている）
+  openDetailKeys.add("next-match");
+  const nextMatch = wrapInCollapsible(bonusWishSummary, "next-match", "次の一致", "クリックで閉じます／開きます");
+  nextMatch.details.classList.add("next-match-details");
+  bonusWishDetails = nextMatch.details;
+  bonusWishDetails.hidden = bonusWishSummary.hidden;
+  document.querySelector('[data-tab-view="bonus-future"]')?.prepend(bonusWishDetails);
   const tableHeading = document.createElement("div");
   tableHeading.className = "step-subheading";
   const tableTitle = document.createElement("h4");
@@ -4422,7 +4466,6 @@ function setupComparisonFrames() {
   tableDescription.textContent = "1行が「何回先」の1回分です。「一致」列に、その回に希望どおりになる武器が出ます。採用するときは、その武器の「採用して〜」ボタンか、左の「ここを0にする」を押します。下の設定は、この表の表示を切り替えるものです。";
   tableHeading.append(tableTitle, tableDescription);
   step3.append(...[
-    bonusWishSummary,
     tableHeading,
     comparisonTableWrap,
     document.querySelector(".bonus-export-actions"),
@@ -4661,6 +4704,19 @@ function renderBonusWishSection() {
     });
     slotFieldset.append(slotLegend, slotList);
 
+    // 攻撃が下がる結果を一致にしないための条件：攻撃EXは最低○個（どちらの指定のしかたでも使える）
+    const minAttackLabel = document.createElement("label");
+    const minAttackText = document.createElement("span");
+    const minAttackSelect = document.createElement("select");
+    minAttackLabel.className = "bonus-wish-min-attack";
+    minAttackText.textContent = "攻撃EXは最低（攻撃が下がる結果を一致にしない）";
+    populateSelect(
+      minAttackSelect,
+      [0, 1, 2, 3, 4, 5].map((count) => [count, count === 0 ? "指定なし" : `攻撃EX ${count}個以上`]),
+      wish.minAttackEx,
+    );
+    minAttackLabel.append(minAttackText, minAttackSelect);
+
     const updateModeView = () => {
       const slotsMode = modeRadios[1].checked;
       categoryFieldset.hidden = slotsMode;
@@ -4696,9 +4752,10 @@ function renderBonusWishSection() {
         c: Number(categorySelect.value),
         lv: Number(levelSelect.value),
       }));
-      if (mode === "slots" || counts.some((count) => count > 0)
+      const minAttackEx = Number(minAttackSelect.value);
+      if (mode === "slots" || minAttackEx > 0 || counts.some((count) => count > 0)
         || slots.some((slot) => slot.c >= 0 || slot.lv > 0)) {
-        bonusWishes[weaponType] = { mode, counts, slots };
+        bonusWishes[weaponType] = { mode, counts, slots, minAttackEx };
       } else {
         delete bonusWishes[weaponType];
       }
@@ -4716,7 +4773,9 @@ function renderBonusWishSection() {
     categoryGrid.addEventListener("change", save);
     slotList.addEventListener("change", save);
     modeBox.addEventListener("change", save);
+    minAttackLabel.addEventListener("change", save);
     clearButton.addEventListener("click", () => {
+      minAttackSelect.value = "0";
       categorySelects.forEach((select) => { select.value = "0"; });
       slotSelects.forEach(({ categorySelect, fillLevels }) => {
         categorySelect.value = "-1";
@@ -4727,7 +4786,7 @@ function renderBonusWishSection() {
 
     const body = document.createElement("div");
     body.className = "weapon-filter-body";
-    body.append(modeBox, categoryFieldset, slotFieldset, note, clearButton);
+    body.append(modeBox, categoryFieldset, slotFieldset, minAttackLabel, note, clearButton);
     row.append(summary, body);
     return row;
   });
@@ -4741,6 +4800,7 @@ function renderBonusWishSummary() {
   const wishedTargets = comparisonRollSets.filter((target) => targetHasWish(target));
   if (!selectedCandidate || wishedTargets.length === 0) {
     bonusWishSummary.hidden = true;
+    if (bonusWishDetails) bonusWishDetails.hidden = true;
     bonusWishSummary.replaceChildren();
     return;
   }
@@ -4873,6 +4933,7 @@ function renderBonusWishSummary() {
 
   bonusWishSummary.replaceChildren(...children);
   bonusWishSummary.hidden = false;
+  if (bonusWishDetails) bonusWishDetails.hidden = false;
 }
 
 function loadOwnedWeapons() {
@@ -4912,6 +4973,7 @@ function loadOwnedWeapons() {
             ? weapon.rule
             : (Array.isArray(weapon.bonuses) ? "upgrade" : "ex"),
           minEx: Math.max(1, Math.min(5, Math.trunc(Number(weapon.minEx) || 2))),
+          keepAttack: weapon.keepAttack !== false,
         };
       });
   } catch {
@@ -5184,17 +5246,25 @@ function createOwnedRuleControls(weapon) {
   const syncVisibility = () => { exLabel.hidden = ruleSelect.value !== "ex"; };
   ruleSelect.addEventListener("change", syncVisibility);
   syncVisibility();
-  wrap.append(ruleLabel, exLabel);
-  return { wrap, ruleSelect, exSelect };
+  // 攻撃は下げない：攻撃の枠の強さ（II=1・III=2・EX=3）の合計が、今より下がる結果は一致にしない
+  const keepLabel = document.createElement("label");
+  const keepAttack = document.createElement("input");
+  keepLabel.className = "owned-keep-attack";
+  keepAttack.type = "checkbox";
+  keepAttack.checked = weapon.keepAttack !== false;
+  keepLabel.append(keepAttack, "攻撃は下げない（攻撃の枠の強さが今より下がる結果は、一致にしない）");
+  wrap.append(ruleLabel, exLabel, keepLabel);
+  return { wrap, ruleSelect, exSelect, keepAttack };
 }
 
-function ownedWeaponFromInputs(base, bonuses, ruleSelect, exSelect) {
+function ownedWeaponFromInputs(base, bonuses, ruleSelect, exSelect, keepAttack = null) {
   return {
     ...base,
     bonuses,
     categories: bonuses.map((bonusId) => bonusId === null ? null : bonusCategoryId(bonusId)),
     rule: ruleSelect.value,
     minEx: Number(exSelect.value),
+    keepAttack: keepAttack ? keepAttack.checked : base.keepAttack !== false,
   };
 }
 
@@ -5426,7 +5496,7 @@ function buildOwnedWeaponContent(container) {
       subtype: subtypeInput.value.trim(),
       seriesIndex: formSkills.seriesIndex,
       groupIndex: formSkills.groupIndex,
-    }, formBonuses, formRule.ruleSelect, formRule.exSelect);
+    }, formBonuses, formRule.ruleSelect, formRule.exSelect, formRule.keepAttack);
     // 復元ボーナスは空でもよい（スキルだけの登録）。入れるなら5枠そろっていること
     const problem = ownedBonusesEmpty(weapon) ? null : ownedWeaponProblem(weapon);
     if (problem) {
@@ -5557,7 +5627,7 @@ function buildOwnedWeaponContent(container) {
     let cardSkills = { seriesIndex: weapon.seriesIndex, groupIndex: weapon.groupIndex };
     const cardRule = createOwnedRuleControls(weapon);
     const save = () => {
-      const next = ownedWeaponFromInputs(weapon, cardBonuses, cardRule.ruleSelect, cardRule.exSelect);
+      const next = ownedWeaponFromInputs(weapon, cardBonuses, cardRule.ruleSelect, cardRule.exSelect, cardRule.keepAttack);
       // 以前の登録で系統だけ分かっている枠は、ボーナスを選ぶまで系統を残す
       next.categories = next.categories.map((category, slotIndex) => category ?? weapon.categories[slotIndex]);
       Object.assign(weapon, next, {
@@ -5999,10 +6069,12 @@ function createOwnedBulkRuleBox() {
       ? `EX ${rule.exSelect.value}個以上`
       : optionName(OWNED_RULE_OPTIONS, rule.ruleSelect.value);
     const targetName = targetSelect.selectedOptions[0]?.textContent ?? "";
-    if (!window.confirm(`${targetName}の一致にする条件を「${ruleName}」にします。よろしいですか？`)) return;
+    const keepText = rule.keepAttack.checked ? "・攻撃は下げない" : "・攻撃を下げてもよい";
+    if (!window.confirm(`${targetName}の一致にする条件を「${ruleName}${keepText}」にします。よろしいですか？`)) return;
     for (const weapon of targets) {
       weapon.rule = rule.ruleSelect.value;
       weapon.minEx = Number(rule.exSelect.value);
+      weapon.keepAttack = rule.keepAttack.checked;
     }
     onOwnedWeaponsChanged();
   });
