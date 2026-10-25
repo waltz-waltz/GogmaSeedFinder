@@ -516,7 +516,22 @@ document.head.append(Object.assign(document.createElement("style"), {
     .artian-base-table .bonus-tag.artian-hit.sharpness-ammo { background: #f2f2f2; border-color: #ffffff; color: #111111; }
     .artian-base-table .bonus-tag.artian-hit.affinity { background: #6b6b6b; border-color: #b5b5b5; color: #ffffff; }
     .artian-base-table .bonus-tag.wish-part { outline: 2px solid #ffd44d; outline-offset: 2px; box-shadow: 0 0 10px 2px rgb(255 212 77 / 55%); }
-    .artian-base-table .bonus-tag.artian-off { opacity: 0.45; }
+    .artian-base-table .bonus-tag.artian-off { opacity: 0.6; font-weight: 700; }
+    /* 08 手持ち武器【通常アーティア】 */
+    .artian-held-mark { display: block; margin-top: 4px; padding: 1px 6px; width: fit-content; border: 1px solid #66c2a5; border-radius: 999px; background: rgb(102 194 165 / 16%); color: #b8f0de; font-size: 0.68rem; font-weight: 800; white-space: nowrap; }
+    .artian-owned-form, .artian-owned-list { margin-top: 14px; padding: 14px; border: 2px solid #8a7a45; border-radius: 12px; background: rgb(0 0 0 / 16%); display: grid; gap: 12px; }
+    .artian-owned-form h3, .artian-owned-list h3 { margin: 0; font-size: 1rem; color: #ffe39a; }
+    .artian-owned-form-row { display: flex; flex-wrap: wrap; gap: 10px 16px; }
+    .artian-owned-field { display: grid; gap: 4px; font-size: 0.78rem; font-weight: 700; color: #cfcab4; }
+    .artian-owned-field input[type="text"] { min-width: 220px; }
+    .artian-owned-message { margin: 0; min-height: 1em; color: #ffe39a; font-size: 0.84rem; font-weight: 700; }
+    .artian-owned-item { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid #3a3c31; border-left: 5px solid #66c2a5; border-radius: 10px; background: rgb(0 0 0 / 20%); }
+    .artian-owned-item-head { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+    .artian-owned-controls { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+    .artian-owned-controls select { width: auto; min-width: 150px; }
+    .artian-owned-verdict { padding: 2px 10px; border-radius: 999px; font-size: 0.78rem; font-weight: 800; border: 1px solid #6b6a55; color: #cfcab4; }
+    .artian-owned-verdict.good { border-color: #ffd44d; background: rgb(255 212 77 / 16%); color: #ffe39a; }
+    .artian-owned-verdict.bad { color: #9a9784; }
     .artian-wish-footer { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; color: #ffe39a; font-size: 0.86rem; font-weight: 800; }
     .artian-wish-footer .text-button { color: #ffffff; }
     /* 07の表：希望どおりの行は金色の帯 */
@@ -1063,6 +1078,8 @@ const openArtianTipButtons = [...document.querySelectorAll("[data-open-artian-ti
 const openArtianCounterSearchButtons = [...document.querySelectorAll("[data-open-artian-counter-search]")];
 // 「手持ち武器」タブ（手持ち武器の登録・編集だけをするページ）。タブの一覧を集める前に足しておく
 // （元のツールの 06・07 通常アーティアの後ろに付くので、番号は自動で 08 になる）
+// 08 手持ち武器【通常アーティア】を先に足す（番号が 08、巨戟の手持ち武器が 09 になる）
+const artianOwnedTabContainer = createArtianOwnedTab();
 const ownedTabContainer = createOwnedWeaponTab();
 // 「00 仕組み（はじめに読む）」タブと、01 使い方の「改良版で増えた機能」
 createSpecTab();
@@ -1147,6 +1164,12 @@ const OWNED_SUBTYPE_BY_BOOST = {
 };
 let ownedWeapons = loadOwnedWeapons();
 let ownedWeaponSection = null;
+// 08 手持ち武器【通常アーティア】：[{ id, label, weaponType, attr(0無属性/1属性あり), ids: 1〜5枠目の通常アーティアのボーナス番号 }]
+const ARTIAN_OWNED_KEY = "gogma-seed-finder-artian-owned-v1";
+const MAX_ARTIAN_OWNED = 140;
+let artianOwned = loadArtianOwned();
+const artianOwnedForm = { weaponType: 11, attr: 1, label: "", ids: [null, null, null, null, null] };
+const artianOwnedUi = { openKeys: new Set() };
 // 06 手持ち武器タブの一番上の所持表。かたまり（武器種＋激化）ごとに、行＝属性、列＝スキル。
 // 列のスキルは "g13"（グループスキルの番号）／"s5"（シリーズスキルの番号）。印は "かたまりID|属性|列" → "o"／"x"
 const OWNED_MATRIX_KEY = "gogma-seed-finder-owned-matrix-v1";
@@ -1233,6 +1256,7 @@ let currentSkillObservations = [];
 wireTablePagers();
 closeSaveFeedbackButton?.addEventListener("click", hideSaveFeedback);
 setupArtianEnhancements();
+renderArtianOwnedTab();
 
 renderComparisonTargets();
 renderBonusOperation();
@@ -1530,7 +1554,7 @@ function createSpecTab() {
   button.dataset.tab = "spec";
   button.setAttribute("aria-selected", "false");
   number.textContent = "00";
-  button.append(number, "仕組み（はじめに読む）");
+  button.append(number, "仕組み");
   nav.prepend(button);
   nav.style.setProperty("--tab-count", String(nav.children.length));
 
@@ -1540,7 +1564,7 @@ function createSpecTab() {
   view.hidden = true;
   view.innerHTML = `
     <section class="panel spec-panel">
-      <div class="section-heading"><div><p class="step">HOW IT WORKS</p><h2>仕組み（はじめに読む）</h2></div></div>
+      <div class="section-heading"><div><p class="step">HOW IT WORKS</p><h2>仕組み</h2></div></div>
       <p class="prediction-intro">このツールは、ゲームの中で「何回目に何が出るか」を数えている番号（カウンター）を使って、先の結果を予測します。
         カウンターは全部で4種類あり、それぞれ<strong>決まった操作をしたときだけ</strong>1つ進みます。</p>
 
@@ -1616,7 +1640,7 @@ function createSpecTab() {
         <ul class="spec-list">
           <li>結果を確かめたあと<b>セーブせずにゲームを終了</b>すれば、カウンターは元に戻ります。</li>
           <li>欲しい結果でセーブしたら、その行の「ここを0にする」を押すと、続きから予測できます。</li>
-          <li>タブの役割：02・03・06で<b>今のカウンターを特定</b> → 04・05・07で<b>先を予測</b> → 08で<b>手持ち武器を管理</b>。</li>
+          <li>タブの役割：02・03・06で<b>今のカウンターを特定</b> → 04・05・07で<b>先を予測</b> → 08・09で<b>手持ち武器を管理</b>。</li>
         </ul>
       </section>
     </section>`;
@@ -1637,7 +1661,8 @@ function addForkGuideBox() {
       <li><button type="button" class="text-button" data-goto-tab="bonus-future">04 復元ボーナス未来予測</button>：武器種ごとの希望、「次の一致」、手持ち武器の強化、通常アーティアとの比べ</li>
       <li><button type="button" class="text-button" data-goto-tab="skill-future">05 スキル未来予測</button>：武器種ごとの条件、「一致」列、所持済みの印</li>
       <li><button type="button" class="text-button" data-goto-tab="artian-search">06</button>・<button type="button" class="text-button" data-goto-tab="artian-future">07 通常アーティア</button>：カード入力、武器種一覧、武器種ごとの希望、「1本作った」、全武器種の次の当たり</li>
-      <li><button type="button" class="text-button" data-goto-tab="owned">08 手持ち武器</button>：持っている武器（今のボーナス・スキル）の登録と所持表</li>
+      <li><button type="button" class="text-button" data-goto-tab="artian-owned">08 手持ち武器【通常】</button>：通常アーティアの登録。同じ構成の印と、巨戟化の候補の判定</li>
+      <li><button type="button" class="text-button" data-goto-tab="owned">09 手持ち武器【巨戟】</button>：巨戟アーティア（今のボーナス・スキル）の登録と所持表</li>
     </ul>`;
   const panel = guide.querySelector(".panel") ?? guide.firstElementChild;
   if (panel) panel.prepend(box);
@@ -1655,7 +1680,7 @@ function createOwnedWeaponTab() {
   button.dataset.tab = "owned";
   button.setAttribute("aria-selected", "false");
   number.textContent = String(nav.querySelectorAll("[data-tab]").length + 1).padStart(2, "0");
-  button.append(number, "手持ち武器");
+  button.append(number, "手持ち武器【巨戟】");
   nav.append(button);
   nav.style.setProperty("--tab-count", String(nav.children.length));
 
@@ -1671,12 +1696,12 @@ function createOwnedWeaponTab() {
   const title = document.createElement("h2");
   step.className = "step";
   step.textContent = "MY WEAPONS";
-  title.textContent = "手持ち武器";
+  title.textContent = "手持ち武器【巨戟】";
   headingText.append(step, title);
   heading.append(headingText);
   const description = document.createElement("p");
   description.className = "prediction-intro";
-  description.textContent = "持っている武器を1本ずつ登録します。ここで登録した武器は、「復元ボーナス未来予測」（同じ構成で再復元の予測・今より強くなる回の判定）と「スキル未来予測」（すでに持っている組み合わせの判定）の両方で使われます。どのタブで登録・編集しても、同じ内容です。";
+  description.textContent = "巨戟アーティア武器（巨戟化したもの）を1本ずつ登録します。通常アーティアのままの武器は、前の「手持ち武器【通常】」タブに登録します。ここで登録した武器は、「復元ボーナス未来予測」（同じ構成で再復元の予測・今より強くなる回の判定）と「スキル未来予測」（すでに持っている組み合わせの判定）の両方で使われます。どのタブで登録・編集しても、同じ内容です。";
   const container = document.createElement("section");
   container.className = "bonus-wish-settings owned-weapon-settings";
   container.dataset.ownedWhere = "tab";
@@ -1958,6 +1983,8 @@ function setActiveTab(tabName, updateHash = true) {
     view.hidden = !active;
   }
   if (updateHash && location.hash !== `#${validTab}`) history.replaceState(null, "", `#${validTab}`);
+  // 狙い（04）の希望が変わっていることがあるので、開くたびに書き直す
+  if (validTab === "artian-owned") renderArtianOwnedTab();
 }
 
 function syncRuntimeFromSaveState() {
@@ -6986,10 +7013,18 @@ function createArtianBaseRow(roll, index) {
   offsetCell.textContent = `${index + 1}本先`;
   beforeCounterCell.className = "artian-counter-cell";
   beforeCounterCell.textContent = roll.counter.toLocaleString("ja-JP");
+  // 手持ち（08）に同じ系統の組み合わせがあれば「所持済み」の印
+  const heldCount = artianOwnedMatches(Number(artianBaseWeaponSelect.value), currentArtianAttributeForce() === 0 ? 0 : 1, roll.bonusIds).length;
+  if (heldCount > 0) {
+    const mark = document.createElement("span");
+    mark.className = "artian-held-mark";
+    mark.textContent = heldCount > 1 ? `所持済み×${heldCount}` : "所持済み";
+    mark.title = "手持ち武器【通常】に、同じ系統の組み合わせの武器があります";
+    offsetCell.append(mark);
+  }
   row.append(offsetCell, beforeCounterCell, createArtianSavedStateCell(index + 1));
   // 改良版：基礎攻撃力はいつも、希望に当てはまる枠も、金の縁で強調。希望どおりの行は金色の帯
   const { counts, none } = artianWishFor(Number(artianBaseWeaponSelect.value));
-  const need = [...counts];
   const hasWish = artianWishIsSet(counts, none);
   if (artianRollMeetsCounts(roll.bonusIds, counts, none)) row.classList.add("prediction-match", "artian-wish-row");
   for (const bonusId of roll.bonusIds) {
@@ -6998,9 +7033,8 @@ function createArtianBaseRow(roll, index) {
     tag.className = `bonus-tag ${artianBaseBonusClassName(bonusId)}`;
     tag.textContent = artianBaseBonusName(Number(artianBaseWeaponSelect.value), bonusId);
     const category = ARTIAN_CATEGORY_BY_ID.get(bonusId);
-    if (need[category] > 0) {
-      // 希望に当てはまる枠：色で塗りつぶし＋金の縁
-      need[category] -= 1;
+    if (counts[category] > 0) {
+      // 希望した系統の枠は、希望の数を超えて出ていても全部強調（色で塗りつぶし＋金の縁）
       tag.classList.add("artian-hit", "wish-part");
     } else if (bonusId === 4) {
       tag.classList.add("wish-part");
@@ -7588,7 +7622,9 @@ function renderArtianNextList() {
     const tr = document.createElement("tr");
     if (row.index < 0) tr.classList.add("none");
     const cells = [
-      row.index < 0 ? "—" : `あと${row.index + 1}本`,
+      row.index < 0
+        ? "—"
+        : `あと${row.index + 1}本${artianOwnedMatches(row.weaponType, row.attr, row.roll.bonusIds).length > 0 ? "（所持済み）" : ""}`,
       row.weaponName,
       row.attr === 0 ? "無属性" : "属性あり",
       artianWishText(row.weaponType, row.wish.counts, row.wish.none),
@@ -7657,5 +7693,339 @@ function artianRouteText(target, count) {
   const attr = BOWGUN_WEAPON_TYPES.has(target.weaponType) || target.attributeForce === 0 ? 0 : 1;
   const rolls = predictArtianBaseRolls(saveState.baseSeed, target.weaponType, ARTIAN_R8_ENUM, attr, counter, count);
   const index = rolls.findIndex((roll) => artianRollMeetsCounts(roll.bonusIds, counts));
-  return index < 0 ? `${count.toLocaleString("ja-JP")}本以内になし` : `あと${index + 1}本`;
+  if (index < 0) return `${count.toLocaleString("ja-JP")}本以内になし`;
+  const held = artianOwnedMatches(target.weaponType, attr, rolls[index].bonusIds).length > 0;
+  return `あと${index + 1}本${held ? "（所持済みの構成）" : ""}`;
+}
+
+// ===== 08 手持ち武器【通常アーティア】 =====
+function loadArtianOwned() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(ARTIAN_OWNED_KEY) ?? "[]");
+    if (!Array.isArray(saved)) return [];
+    return saved
+      .filter((weapon) =>
+        Number.isSafeInteger(weapon?.weaponType) && weapon.weaponType >= 0 && weapon.weaponType <= 13
+        && Array.isArray(weapon.ids) && weapon.ids.length === 5
+        && weapon.ids.every((bonusId) => ARTIAN_CATEGORY_BY_ID.has(bonusId)))
+      .slice(0, MAX_ARTIAN_OWNED)
+      .map((weapon) => ({
+        id: typeof weapon.id === "string" && weapon.id ? weapon.id : createTargetId(),
+        label: typeof weapon.label === "string" ? weapon.label.slice(0, 24) : "",
+        weaponType: weapon.weaponType,
+        attr: BOWGUN_WEAPON_TYPES.has(weapon.weaponType) || weapon.attr === 0 ? 0 : 1,
+        ids: [...weapon.ids],
+      }));
+  } catch {
+    return [];
+  }
+}
+
+function persistArtianOwned() {
+  try {
+    localStorage.setItem(ARTIAN_OWNED_KEY, JSON.stringify(artianOwned));
+  } catch {
+    // The app remains usable when storage is unavailable.
+  }
+}
+
+// 5枠の並びは問わず、系統の組み合わせが同じか（通常アーティアは巨戟化しても系統が引き継がれる）
+function artianOwnedSignature(ids) {
+  return [...ids].sort((a, b) => a - b).join(",");
+}
+
+function artianOwnedMatches(weaponType, attr, bonusIds) {
+  const signature = artianOwnedSignature(bonusIds);
+  return artianOwned.filter((weapon) =>
+    weapon.weaponType === weaponType && weapon.attr === attr && artianOwnedSignature(weapon.ids) === signature);
+}
+
+function artianOwnedWeaponText(weapon) {
+  return `${optionName(WEAPON_TYPES, weapon.weaponType)}・${weapon.attr === 0 ? "無属性" : "属性あり"}`;
+}
+
+function createArtianOwnedTab() {
+  const nav = document.querySelector(".app-tabs");
+  const lastView = [...document.querySelectorAll("[data-tab-view]")].pop();
+  if (!nav || !lastView) return null;
+  const button = document.createElement("button");
+  const number = document.createElement("span");
+  button.type = "button";
+  button.className = "tab-button";
+  button.dataset.tab = "artian-owned";
+  button.setAttribute("aria-selected", "false");
+  number.textContent = String(nav.querySelectorAll("[data-tab]").length + 1).padStart(2, "0");
+  button.append(number, "手持ち武器【通常】");
+  nav.append(button);
+  nav.style.setProperty("--tab-count", String(nav.children.length));
+
+  const view = document.createElement("div");
+  view.className = "tab-view";
+  view.dataset.tabView = "artian-owned";
+  const panel = document.createElement("section");
+  panel.className = "panel owned-tab-panel artian-owned-panel";
+  panel.innerHTML = `
+    <div class="section-heading"><div><p class="step">MY NORMAL ARTIAN</p><h2>手持ち武器【通常アーティア】</h2></div></div>
+    <p class="prediction-intro">持っている通常アーティア（巨戟化したが、復元強化はまだのものも含む）の5枠の系統を登録します。
+    ① 07の表に、同じ系統の組み合わせが出たら「所持済み」の印を出します（作るのをやめる必要はありません。もう1本ほしければ作れます）。
+    ② 04で決めた狙いに合うかを判定します（巨戟化の候補）。③ 巨戟化したら「巨戟化した」ボタンで 手持ち武器【巨戟】に移すと、04の「同じ構成で再復元」の予測に使われます。</p>
+    <div class="artian-owned-body"></div>`;
+  view.append(panel);
+  lastView.after(view);
+  return panel.querySelector(".artian-owned-body");
+}
+
+function onArtianOwnedChanged() {
+  persistArtianOwned();
+  renderArtianOwnedTab();
+  if (!artianBaseTableWrap.hidden) renderArtianBaseTable();
+  renderArtianNextList();
+  void refreshComparisonPredictions();
+}
+
+function renderArtianOwnedTab() {
+  const root = artianOwnedTabContainer;
+  if (!root) return;
+  const form = artianOwnedForm;
+  if (BOWGUN_WEAPON_TYPES.has(form.weaponType)) form.attr = 0;
+  const pool = artianBasePool(form.weaponType, form.attr);
+
+  const field = (labelText, control) => {
+    const label = document.createElement("label");
+    const text = document.createElement("span");
+    label.className = "artian-owned-field";
+    text.textContent = labelText;
+    label.append(text, control);
+    return label;
+  };
+  const makeSelect = (options, value, onChange, disabled = false) => {
+    const select = document.createElement("select");
+    for (const [optionValue, name] of options) {
+      const option = document.createElement("option");
+      option.value = String(optionValue);
+      option.textContent = name;
+      option.selected = optionValue === value;
+      select.append(option);
+    }
+    select.disabled = disabled;
+    select.addEventListener("change", () => onChange(Number(select.value)));
+    return select;
+  };
+  const resetIds = () => { form.ids = [null, null, null, null, null]; };
+  const weaponSelect = makeSelect(WEAPON_TYPES, form.weaponType, (value) => {
+    form.weaponType = value;
+    resetIds();
+    renderArtianOwnedTab();
+  });
+  const attrSelect = makeSelect([[0, "無属性"], [1, "属性あり"]], form.attr, (value) => {
+    form.attr = value;
+    resetIds();
+    renderArtianOwnedTab();
+  }, BOWGUN_WEAPON_TYPES.has(form.weaponType));
+  const nameInput = document.createElement("input");
+  nameInput.type = "text";
+  nameInput.maxLength = 24;
+  nameInput.placeholder = "名前（なくてもOK）";
+  nameInput.value = form.label;
+  nameInput.addEventListener("input", () => { form.label = nameInput.value; });
+
+  const formBox = document.createElement("section");
+  formBox.className = "artian-owned-form";
+  const formTitle = document.createElement("h3");
+  formTitle.textContent = "新しく登録";
+  const formRow = document.createElement("div");
+  formRow.className = "artian-owned-form-row";
+  formRow.append(field("武器種", weaponSelect), field("属性", attrSelect), field("名前", nameInput));
+
+  const registerButton = document.createElement("button");
+  const formMessage = document.createElement("p");
+  formMessage.className = "artian-owned-message";
+  formMessage.textContent = artianOwnedUi.message ?? "";
+  const picker = createBonusCardPicker({
+    weaponType: form.weaponType,
+    options: ARTIAN_BASE_BONUSES
+      .filter(([bonusId]) => pool.ids.includes(bonusId))
+      .map(([bonusId]) => [bonusId, artianBaseBonusName(form.weaponType, bonusId)]),
+    values: form.ids,
+    clearText: "5枠をクリア",
+    classOf: artianBaseBonusClassName,
+    nameOf: (bonusId) => artianBaseBonusName(form.weaponType, bonusId),
+    isEx: () => false,
+    onChange: (_index, _bonusId, all) => {
+      form.ids = all;
+      registerButton.disabled = all.some((value) => value === null);
+    },
+  });
+  registerButton.type = "button";
+  registerButton.className = "primary-button artian-owned-register";
+  registerButton.textContent = "この武器を登録する";
+  registerButton.disabled = form.ids.some((value) => value === null);
+  registerButton.addEventListener("click", () => {
+    if (form.ids.some((value) => value === null)) return;
+    if (artianOwned.length >= MAX_ARTIAN_OWNED) {
+      artianOwnedUi.message = `手持ち武器【通常】は最大${MAX_ARTIAN_OWNED}本です。不要な武器を削除してください。`;
+      renderArtianOwnedTab();
+      return;
+    }
+    for (const bonusId of pool.ids) {
+      const used = form.ids.filter((value) => value === bonusId).length;
+      const cap = pool.caps.get(bonusId) ?? 5;
+      if (used > cap) {
+        artianOwnedUi.message = `この武器種では「${artianBaseBonusName(form.weaponType, bonusId)}」は最大${cap}枠までです（入力を確かめてください）。`;
+        renderArtianOwnedTab();
+        return;
+      }
+    }
+    const weapon = {
+      id: createTargetId(),
+      label: form.label.trim().slice(0, 24),
+      weaponType: form.weaponType,
+      attr: form.attr,
+      ids: [...form.ids],
+    };
+    artianOwned.push(weapon);
+    artianOwnedUi.message = `${artianOwnedWeaponText(weapon)}を登録しました。`;
+    resetIds();
+    form.label = "";
+    onArtianOwnedChanged();
+  });
+  formBox.append(formTitle, formRow, picker.element, registerButton, formMessage);
+
+  const listBox = document.createElement("section");
+  listBox.className = "artian-owned-list";
+  const listTitle = document.createElement("h3");
+  listTitle.textContent = `登録済み（${artianOwned.length}/${MAX_ARTIAN_OWNED}本）`;
+  listBox.append(listTitle);
+  if (artianOwned.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "empty-result";
+    empty.textContent = "まだ登録がありません。上で武器種・属性・5枠の系統を入れて登録してください。";
+    listBox.append(empty);
+  }
+  const sorted = [...artianOwned].sort((a, b) => a.weaponType - b.weaponType || a.attr - b.attr);
+  for (const weapon of sorted) listBox.append(createArtianOwnedItem(weapon));
+  root.replaceChildren(formBox, listBox);
+}
+
+function createArtianOwnedItem(weapon) {
+  const item = document.createElement("div");
+  item.className = "artian-owned-item";
+  const head = document.createElement("div");
+  head.className = "artian-owned-item-head";
+  const badge = document.createElement("span");
+  badge.className = "weapon-badge";
+  badge.textContent = artianOwnedWeaponText(weapon);
+  head.append(badge);
+  if (weapon.label) {
+    const label = document.createElement("span");
+    label.className = "target-label-text";
+    label.textContent = weapon.label;
+    head.append(label);
+  }
+  const tags = document.createElement("div");
+  tags.className = "artian-mini-tags";
+  for (const bonusId of weapon.ids) {
+    const tag = document.createElement("span");
+    tag.className = `bonus-tag compact ${artianBaseBonusClassName(bonusId)}`;
+    tag.textContent = artianBaseBonusName(weapon.weaponType, bonusId).replace("強化", "");
+    tags.append(tag);
+  }
+
+  // 巨戟化の候補：04で決めた狙い（系統の数）に合うか
+  const verdict = document.createElement("span");
+  verdict.className = "artian-owned-verdict";
+  const { counts } = wishCategoryCounts(weapon.weaponType);
+  if (!artianWishIsSet(counts, [])) {
+    verdict.classList.add("unset");
+    verdict.textContent = "狙い未設定（04で希望を決めると判定します）";
+  } else if (artianRollMeetsCounts(weapon.ids, counts, [])) {
+    verdict.classList.add("good");
+    verdict.textContent = `巨戟化の候補：狙い（${artianWishText(weapon.weaponType, counts)}）に合います`;
+  } else {
+    verdict.classList.add("bad");
+    verdict.textContent = `狙い（${artianWishText(weapon.weaponType, counts)}）には足りません`;
+  }
+  head.append(verdict);
+
+  const controls = document.createElement("div");
+  controls.className = "artian-owned-controls";
+  let attributeForce = 0;
+  if (weapon.attr === 1) {
+    attributeForce = artianOwnedUi.attrPick?.[weapon.id] ?? 1;
+    const select = document.createElement("select");
+    for (const [value, name] of ATTRIBUTES.filter(([value]) => value !== 0)) {
+      const option = document.createElement("option");
+      option.value = String(value);
+      option.textContent = name;
+      option.selected = value === attributeForce;
+      select.append(option);
+    }
+    select.addEventListener("change", () => {
+      artianOwnedUi.attrPick = { ...(artianOwnedUi.attrPick ?? {}), [weapon.id]: Number(select.value) };
+    });
+    select.title = "巨戟化したときの属性";
+    controls.append(select);
+  }
+  const moveButton = document.createElement("button");
+  moveButton.type = "button";
+  moveButton.className = "secondary small-button";
+  moveButton.textContent = "巨戟化した（手持ち【巨戟】へ移す）";
+  moveButton.title = "04の「同じ構成で再復元」の予測で使えるようになります";
+  moveButton.addEventListener("click", () => {
+    const picked = weapon.attr === 1 ? (artianOwnedUi.attrPick?.[weapon.id] ?? 1) : 0;
+    moveArtianOwnedToKyogeki(weapon, picked);
+  });
+  const removeButton = document.createElement("button");
+  removeButton.type = "button";
+  removeButton.className = "text-button";
+  removeButton.textContent = "削除";
+  let armed = false;
+  removeButton.addEventListener("click", () => {
+    if (!armed) {
+      armed = true;
+      removeButton.textContent = "もう一度押すと削除";
+      setTimeout(() => { armed = false; removeButton.textContent = "削除"; }, 3000);
+      return;
+    }
+    artianOwned = artianOwned.filter((candidate) => candidate.id !== weapon.id);
+    artianOwnedUi.message = "削除しました。";
+    onArtianOwnedChanged();
+  });
+  controls.append(moveButton, removeButton);
+  item.append(head, tags, controls);
+  return item;
+}
+
+// 巨戟化した通常アーティアを、手持ち武器【巨戟】（復元ボーナスは系統だけ・EX数で判定）に移す
+function moveArtianOwnedToKyogeki(weapon, attributeForce) {
+  if (ownedWeapons.length >= MAX_OWNED_WEAPONS) {
+    artianOwnedUi.message = `手持ち武器【巨戟】は最大${MAX_OWNED_WEAPONS}本です。不要な武器を削除してください。`;
+    renderArtianOwnedTab();
+    return;
+  }
+  const kyogeki = {
+    id: createTargetId(),
+    label: weapon.label,
+    boost: "",
+    subtype: "",
+    seriesIndex: null,
+    groupIndex: null,
+    weaponType: weapon.weaponType,
+    attributeForce,
+    bonuses: [null, null, null, null, null],
+    categories: weapon.ids.map((bonusId) => ARTIAN_CATEGORY_BY_ID.get(bonusId)),
+    rule: "ex",
+    minEx: 2,
+  };
+  const problem = ownedWeaponProblem(kyogeki);
+  if (problem) {
+    artianOwnedUi.message = `移せませんでした：${problem}`;
+    renderArtianOwnedTab();
+    return;
+  }
+  ownedWeapons.push(kyogeki);
+  artianOwned = artianOwned.filter((candidate) => candidate.id !== weapon.id);
+  artianOwnedUi.message = `${artianOwnedWeaponText({ ...weapon, attr: attributeForce === 0 ? 0 : 1 })}を手持ち武器【巨戟】に移しました。04の「次の一致」で、同じ構成での再復元が予測に出ます。`;
+  onOwnedWeaponsChanged();
+  onArtianOwnedChanged();
 }
