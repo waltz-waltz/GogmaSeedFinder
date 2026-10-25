@@ -601,7 +601,8 @@ document.head.append(Object.assign(document.createElement("style"), {
     .adopt-flow-row { display: grid; gap: 4px; }
     .adopt-flow-label { color: #b9b6a4; font-size: 0.74rem; font-weight: 800; }
     .adopt-flow-arrow { color: #ffe39a; font-size: 2.2rem; font-weight: 900; line-height: 1; text-align: left; padding-left: 24px; }
-    .adopt-flow .comparison-bonus-set { grid-template-columns: repeat(5, auto); justify-content: start; }
+    .adopt-flow .comparison-bonus-set { grid-template-columns: repeat(5, 88px); justify-content: start; }
+    .adopt-flow .comparison-bonus-set .bonus-tag { width: 100%; box-sizing: border-box; display: inline-flex; justify-content: center; align-items: center; white-space: nowrap; }
     .skill-adopt-detail-rich { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
     .skill-adopt-detail-rich .comparison-bonus-set { grid-template-columns: repeat(5, auto); }
     .skill-adopt-menu p { margin: 0 0 2px; color: #ffe39a; font-size: 0.78rem; font-weight: 800; }
