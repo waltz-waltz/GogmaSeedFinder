@@ -596,6 +596,12 @@ document.head.append(Object.assign(document.createElement("style"), {
     .skill-adopt-cancel { justify-self: end; margin-top: 4px; color: #ffffff; }
     .skill-adopt-heading { margin: 0; color: #ffe39a; font-size: 0.82rem; font-weight: 800; }
     .skill-adopt-summary .comparison-bonus-set { grid-template-columns: repeat(5, auto); }
+    .adopt-flow { display: grid; gap: 6px; width: 100%; }
+    .adopt-flow-head { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; font-size: 1rem; font-weight: 800; }
+    .adopt-flow-row { display: grid; gap: 4px; }
+    .adopt-flow-label { color: #b9b6a4; font-size: 0.74rem; font-weight: 800; }
+    .adopt-flow-arrow { color: #ffe39a; font-size: 2.2rem; font-weight: 900; line-height: 1; text-align: left; padding-left: 24px; }
+    .adopt-flow .comparison-bonus-set { grid-template-columns: repeat(5, auto); justify-content: start; }
     .skill-adopt-detail-rich { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
     .skill-adopt-detail-rich .comparison-bonus-set { grid-template-columns: repeat(5, auto); }
     .skill-adopt-menu p { margin: 0 0 2px; color: #ffe39a; font-size: 0.78rem; font-weight: 800; }
@@ -5223,16 +5229,25 @@ function createAdoptOwnedUpdateButton(target, bonusIds, completedRolls) {
     const weapon = ownedWeapons.find((candidate) => candidate.id === target.id);
     if (!weapon) return;
     // 「今」と「新しく」を同じタグで並べて、見比べやすくする
-    const nowLabel = document.createElement("span");
-    nowLabel.className = "skill-adopt-detail";
-    nowLabel.textContent = "今：";
-    const arrow = document.createElement("span");
-    arrow.className = "skill-adopt-detail";
-    arrow.textContent = "→　新しく：";
-    const nowChips = createOwnedBonusChips(weapon);
+    // 上から：武器の名前 → 今のボーナス → 大きな↓ → 新しく付与されるボーナス
+    const flow = document.createElement("div");
+    flow.className = "adopt-flow";
+    const flowRow = (className, ...children) => {
+      const row = document.createElement("div");
+      row.className = className;
+      row.append(...children);
+      return row;
+    };
+    const flowLabel = (text) => Object.assign(document.createElement("span"), { className: "adopt-flow-label", textContent: text });
+    flow.append(
+      flowRow("adopt-flow-head", ...createWeaponBadge(target)),
+      flowRow("adopt-flow-row", flowLabel("今のボーナス"), createOwnedBonusChips(weapon)),
+      flowRow("adopt-flow-arrow", "↓"),
+      flowRow("adopt-flow-row", flowLabel("新しく付与される復元ボーナス"), createCompactBonusSet(target, bonusIds)),
+    );
     openAdoptDialog({
       title: `${completedRolls}回先の復元ボーナスで手持ち武器を更新`,
-      summary: [...createWeaponBadge(target), nowLabel, nowChips, arrow, createCompactBonusSet(target, bonusIds)],
+      summary: [flow],
       note: `「${comparisonTargetName(weapon)}」の今のボーナスを書き換えて、復元ボーナスカウンターの0地点を${completedRolls}回先まで進めます。`,
       heading: "反映してよいですか？",
       choices: [{
