@@ -529,6 +529,9 @@ document.head.append(Object.assign(document.createElement("style"), {
     .artian-owned-item-head { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
     .artian-owned-controls { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
     .artian-owned-controls select { width: auto; min-width: 150px; }
+    .artian-adopt-button { margin-top: 6px; white-space: nowrap; }
+    .artian-next-adopt { margin-top: 0; margin-left: 8px; }
+    .artian-next-table td:last-child { white-space: nowrap; }
     .artian-owned-verdict { padding: 2px 10px; border-radius: 999px; font-size: 0.78rem; font-weight: 800; border: 1px solid #6b6a55; color: #cfcab4; }
     .artian-owned-verdict.good { border-color: #ffd44d; background: rgb(255 212 77 / 16%); color: #ffe39a; }
     .artian-owned-verdict.bad { color: #9a9784; }
@@ -1181,7 +1184,7 @@ let ownedWeaponSection = null;
 const ARTIAN_OWNED_KEY = "gogma-seed-finder-artian-owned-v1";
 const MAX_ARTIAN_OWNED = 140;
 let artianOwned = loadArtianOwned();
-const artianOwnedForm = { weaponType: 11, attr: 1, label: "", ids: [null, null, null, null, null] };
+const artianOwnedForm = { weaponType: 11, attr: 1, element: 1, label: "", ids: [null, null, null, null, null] };
 const artianOwnedUi = { openKeys: new Set() };
 // 06 手持ち武器タブの一番上の所持表。かたまり（武器種＋激化）ごとに、行＝属性、列＝スキル。
 // 列のスキルは "g13"（グループスキルの番号）／"s5"（シリーズスキルの番号）。印は "かたまりID|属性|列" → "o"／"x"
@@ -7142,11 +7145,11 @@ function createArtianBaseRow(roll, index) {
   beforeCounterCell.className = "artian-counter-cell";
   beforeCounterCell.textContent = roll.counter.toLocaleString("ja-JP");
   // 手持ち（08）に同じ系統の組み合わせがあれば「所持済み」の印
-  const heldCount = artianOwnedMatches(Number(artianBaseWeaponSelect.value), currentArtianAttributeForce() === 0 ? 0 : 1, roll.bonusIds).length;
-  if (heldCount > 0) {
+  const heldText = artianHeldText(artianOwnedMatches(Number(artianBaseWeaponSelect.value), currentArtianAttributeForce() === 0 ? 0 : 1, roll.bonusIds));
+  if (heldText) {
     const mark = document.createElement("span");
     mark.className = "artian-held-mark";
-    mark.textContent = heldCount > 1 ? `所持済み×${heldCount}` : "所持済み";
+    mark.textContent = heldText;
     mark.title = "手持ち武器【通常】に、同じ系統の組み合わせの武器があります";
     offsetCell.append(mark);
   }
@@ -7189,7 +7192,86 @@ function createArtianSavedStateCell(completedCreations) {
   button.textContent = "ここを0にする";
   button.addEventListener("click", () => adoptArtianBasePosition(completedCreations));
   cell.append(value, button);
+  if (counter !== null) {
+    const weaponType = Number(artianBaseWeaponSelect.value);
+    const bonusIds = artianBasePredictionRolls[completedCreations - 1]?.bonusIds;
+    if (bonusIds) {
+      cell.append(createArtianAdoptButton(weaponType, currentArtianAttributeForce() === 0 ? 0 : 1, completedCreations, bonusIds));
+    }
+  }
   return cell;
+}
+
+// 「採用して手持ち武器に登録」：その本数まで作ったことにして（0地点を進める）、できた武器を手持ち武器【通常】に登録する
+function createArtianAdoptButton(weaponType, attr, completedCreations, bonusIds) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "keep-transition-button artian-adopt-button";
+  button.textContent = "採用して手持ち武器に登録";
+  button.title = "押すと、確かめる窓が出ます（押しただけでは何も変わりません）";
+  button.addEventListener("click", () => {
+    const weapon = { weaponType, attr };
+    const tags = document.createElement("div");
+    tags.className = "artian-mini-tags";
+    for (const bonusId of bonusIds) {
+      const tag = document.createElement("span");
+      tag.className = `bonus-tag compact ${artianBaseBonusClassName(bonusId)}`;
+      tag.textContent = artianBaseBonusName(weaponType, bonusId).replace("強化", "");
+      tags.append(tag);
+    }
+    const badge = document.createElement("span");
+    badge.className = "weapon-badge";
+    badge.textContent = artianOwnedWeaponText(weapon);
+    const held = artianOwnedMatches(weaponType, attr, bonusIds);
+    // 属性なしは1択。属性ありは、作るときに決めた属性を選ぶ（この組み合わせをまだ持っていない属性を先頭に）
+    const elements = attr === 0
+      ? [0]
+      : ATTRIBUTES.map(([value]) => value).filter((value) => value !== 0)
+        .map((value, order) => ({ value, order, has: held.some((owned) => owned.element === value) }))
+        .sort((a, b) => Number(a.has) - Number(b.has) || a.order - b.order)
+        .map((entry) => entry.value);
+    openAdoptDialog({
+      title: `${completedCreations}本先の通常アーティアを手持ち武器に登録`,
+      summary: [badge, tags],
+      note: `作成カウンターの0地点を${completedCreations}本先まで進めて、この武器を「手持ち武器【通常】」に登録します。${attr === 1 ? "作るときに決めた属性を選んでください。" : ""}`,
+      heading: held.length > 0 ? `この系統の組み合わせは、${artianHeldText(held)}。` : "どれで登録しますか？",
+      choices: elements.map((element) => {
+        const target = { weaponType, attr, element: attr === 1 ? element : null };
+        const has = held.some((owned) => owned.element === target.element);
+        return {
+          tag: "手持ち武器【通常】",
+          name: `${artianOwnedWeaponText(target)} として登録する`,
+          detail: attr === 1 ? (has ? "この属性では、すでに持っている構成です" : "この属性では未所持の構成です") : undefined,
+          onChoose: () => adoptArtianAndRegister(weaponType, attr, target.element, completedCreations, bonusIds),
+        };
+      }),
+    });
+  });
+  return button;
+}
+
+function adoptArtianAndRegister(weaponType, attr, element, completedCreations, bonusIds) {
+  const counter = artianBaseCounterForWeapon(weaponType);
+  if (counter === null) return;
+  const nextCounter = counter + completedCreations;
+  if (nextCounter > 1_000_000) return;
+  const weaponName = optionName(WEAPON_TYPES, weaponType);
+  const registered = artianOwned.length < MAX_ARTIAN_OWNED;
+  const key = artianBaseCounterKey(weaponType);
+  artianBaseState.counters[key] = nextCounter;
+  artianBaseState.sources[key] = "予測結果";
+  persistAppState();
+  if (registered) {
+    artianOwned.push({ id: createTargetId(), label: "", weaponType, attr, element, ids: [...bonusIds] });
+    artianOwnedUi.message = `${artianOwnedWeaponText({ weaponType, attr, element })}を登録しました。`;
+  }
+  renderArtianBaseState();
+  showSavedCounters([
+    `${weaponName}の作成カウンター ${nextCounter.toLocaleString("ja-JP")} を保存しました。`,
+    registered ? "手持ち武器【通常】に登録しました。" : `手持ち武器【通常】が最大${MAX_ARTIAN_OWNED}本のため、登録はしていません。`,
+  ]);
+  refreshArtianBasePredictions();
+  onArtianOwnedChanged();
 }
 
 function adoptArtianBasePosition(completedCreations) {
@@ -7752,7 +7834,10 @@ function renderArtianNextList() {
     const cells = [
       row.index < 0
         ? "—"
-        : `あと${row.index + 1}本${artianOwnedMatches(row.weaponType, row.attr, row.roll.bonusIds).length > 0 ? "（所持済み）" : ""}`,
+        : `あと${row.index + 1}本${(() => {
+          const held = artianHeldText(artianOwnedMatches(row.weaponType, row.attr, row.roll.bonusIds));
+          return held ? `（${held}）` : "";
+        })()}`,
       row.weaponName,
       row.attr === 0 ? "無属性" : "属性あり",
       artianWishText(row.weaponType, row.wish.counts, row.wish.none),
@@ -7783,6 +7868,11 @@ function renderArtianNextList() {
     openButton.textContent = "この武器種を開く";
     openButton.addEventListener("click", () => updateArtianTargetSelection(row.weaponType, row.attr));
     open.append(openButton);
+    if (row.index >= 0) {
+      const adopt = createArtianAdoptButton(row.weaponType, row.attr, row.index + 1, row.roll.bonusIds);
+      adopt.classList.add("artian-next-adopt");
+      open.append(adopt);
+    }
     tr.append(...cells, result, open);
     body.append(tr);
   }
@@ -7822,8 +7912,8 @@ function artianRouteText(target, count) {
   const rolls = predictArtianBaseRolls(saveState.baseSeed, target.weaponType, ARTIAN_R8_ENUM, attr, counter, count);
   const index = rolls.findIndex((roll) => artianRollMeetsCounts(roll.bonusIds, counts));
   if (index < 0) return `${count.toLocaleString("ja-JP")}本以内になし`;
-  const held = artianOwnedMatches(target.weaponType, attr, rolls[index].bonusIds).length > 0;
-  return `あと${index + 1}本${held ? "（所持済みの構成）" : ""}`;
+  const held = artianHeldText(artianOwnedMatches(target.weaponType, attr, rolls[index].bonusIds));
+  return `あと${index + 1}本${held ? `（${held}）` : ""}`;
 }
 
 // ===== 08 手持ち武器【通常アーティア】 =====
@@ -7842,6 +7932,9 @@ function loadArtianOwned() {
         label: typeof weapon.label === "string" ? weapon.label.slice(0, 24) : "",
         weaponType: weapon.weaponType,
         attr: BOWGUN_WEAPON_TYPES.has(weapon.weaponType) || weapon.attr === 0 ? 0 : 1,
+        // 属性の種類（ATTRIBUTES の番号）。無属性・以前の登録（種類未設定）は null
+        element: !BOWGUN_WEAPON_TYPES.has(weapon.weaponType) && weapon.attr !== 0
+          && ATTRIBUTES.some(([value]) => value !== 0 && value === weapon.element) ? weapon.element : null,
         ids: [...weapon.ids],
       }));
   } catch {
@@ -7868,8 +7961,27 @@ function artianOwnedMatches(weaponType, attr, bonusIds) {
     weapon.weaponType === weaponType && weapon.attr === attr && artianOwnedSignature(weapon.ids) === signature);
 }
 
+function artianElementName(element) {
+  return optionName(ATTRIBUTES, element).replace("属性", "");
+}
+
+// 例：「弓・火」「ランス・無属性」「弓・属性あり（種類未設定）」
 function artianOwnedWeaponText(weapon) {
-  return `${optionName(WEAPON_TYPES, weapon.weaponType)}・${weapon.attr === 0 ? "無属性" : "属性あり"}`;
+  const base = optionName(WEAPON_TYPES, weapon.weaponType);
+  if (weapon.attr === 0) return `${base}・無属性`;
+  return weapon.element ? `${base}・${artianElementName(weapon.element)}` : `${base}・属性あり（種類未設定）`;
+}
+
+// 「所持済み：火・水」（その武器種・系統の組み合わせを、どの属性で持っているか）
+function artianHeldText(matches) {
+  if (matches.length === 0) return "";
+  if (matches[0].attr === 0) return matches.length > 1 ? `所持済み×${matches.length}` : "所持済み";
+  const counts = new Map();
+  for (const weapon of matches) {
+    const name = weapon.element ? artianElementName(weapon.element) : "種類未設定";
+    counts.set(name, (counts.get(name) ?? 0) + 1);
+  }
+  return `所持済み：${[...counts].map(([name, count]) => (count > 1 ? `${name}×${count}` : name)).join("・")}`;
 }
 
 function createArtianOwnedTab() {
@@ -7963,7 +8075,16 @@ function renderArtianOwnedTab() {
   formTitle.textContent = "新しく登録";
   const formRow = document.createElement("div");
   formRow.className = "artian-owned-form-row";
-  formRow.append(field("武器種", weaponSelect), field("属性", attrSelect), field("名前", nameInput));
+  formRow.append(field("武器種", weaponSelect), field("属性", attrSelect));
+  // 属性ありの武器は、作るときに決めた属性の種類も選ぶ（属性ごとに別の武器になる）
+  if (form.attr === 1) {
+    formRow.append(field("属性の種類", makeSelect(
+      ATTRIBUTES.filter(([value]) => value !== 0).map(([value, name]) => [value, name]),
+      form.element,
+      (value) => { form.element = value; },
+    )));
+  }
+  formRow.append(field("名前", nameInput));
 
   const registerButton = document.createElement("button");
   const formMessage = document.createElement("p");
@@ -8009,6 +8130,7 @@ function renderArtianOwnedTab() {
       label: form.label.trim().slice(0, 24),
       weaponType: form.weaponType,
       attr: form.attr,
+      element: form.attr === 1 ? form.element : null,
       ids: [...form.ids],
     };
     artianOwned.push(weapon);
@@ -8030,7 +8152,8 @@ function renderArtianOwnedTab() {
     empty.textContent = "まだ登録がありません。上で武器種・属性・5枠の系統を入れて登録してください。";
     listBox.append(empty);
   }
-  const sorted = [...artianOwned].sort((a, b) => a.weaponType - b.weaponType || a.attr - b.attr);
+  const sorted = [...artianOwned].sort((a, b) =>
+    a.weaponType - b.weaponType || a.attr - b.attr || (a.element ?? 99) - (b.element ?? 99));
   for (const weapon of sorted) listBox.append(createArtianOwnedItem(weapon));
   root.replaceChildren(formBox, listBox);
 }
@@ -8077,21 +8200,27 @@ function createArtianOwnedItem(weapon) {
 
   const controls = document.createElement("div");
   controls.className = "artian-owned-controls";
-  let attributeForce = 0;
   if (weapon.attr === 1) {
-    attributeForce = artianOwnedUi.attrPick?.[weapon.id] ?? 1;
+    // 作るときに決めた属性の種類（以前の登録は「種類未設定」。ここで選べる）
     const select = document.createElement("select");
+    const unset = document.createElement("option");
+    unset.value = "";
+    unset.textContent = "属性の種類：未設定";
+    unset.selected = !weapon.element;
+    select.append(unset);
     for (const [value, name] of ATTRIBUTES.filter(([value]) => value !== 0)) {
       const option = document.createElement("option");
       option.value = String(value);
       option.textContent = name;
-      option.selected = value === attributeForce;
+      option.selected = value === weapon.element;
       select.append(option);
     }
     select.addEventListener("change", () => {
-      artianOwnedUi.attrPick = { ...(artianOwnedUi.attrPick ?? {}), [weapon.id]: Number(select.value) };
+      weapon.element = select.value === "" ? null : Number(select.value);
+      artianOwnedUi.message = "";
+      onArtianOwnedChanged();
     });
-    select.title = "巨戟化したときの属性";
+    select.title = "この武器を作るときに決めた属性";
     controls.append(select);
   }
   const moveButton = document.createElement("button");
@@ -8100,8 +8229,12 @@ function createArtianOwnedItem(weapon) {
   moveButton.textContent = "巨戟化した（手持ち【巨戟】へ移す）";
   moveButton.title = "04の「同じ構成で再復元」の予測で使えるようになります";
   moveButton.addEventListener("click", () => {
-    const picked = weapon.attr === 1 ? (artianOwnedUi.attrPick?.[weapon.id] ?? 1) : 0;
-    moveArtianOwnedToKyogeki(weapon, picked);
+    if (weapon.attr === 1 && !weapon.element) {
+      artianOwnedUi.message = "先に、この武器の属性の種類（火・水など）を選んでください。";
+      renderArtianOwnedTab();
+      return;
+    }
+    moveArtianOwnedToKyogeki(weapon, weapon.attr === 1 ? weapon.element : 0);
   });
   const removeButton = document.createElement("button");
   removeButton.type = "button";
@@ -8153,7 +8286,7 @@ function moveArtianOwnedToKyogeki(weapon, attributeForce) {
   }
   ownedWeapons.push(kyogeki);
   artianOwned = artianOwned.filter((candidate) => candidate.id !== weapon.id);
-  artianOwnedUi.message = `${artianOwnedWeaponText({ ...weapon, attr: attributeForce === 0 ? 0 : 1 })}を手持ち武器【巨戟】に移しました。04の「次の一致」で、同じ構成での再復元が予測に出ます。`;
+  artianOwnedUi.message = `${artianOwnedWeaponText(weapon)}を手持ち武器【巨戟】に移しました。04の「次の一致」で、同じ構成での再復元が予測に出ます。`;
   onOwnedWeaponsChanged();
   onArtianOwnedChanged();
 }
