@@ -209,7 +209,7 @@ const SKILL_COUNTER_GATE = 54;
 const MAX_REGISTERED_TARGETS = 140;
 
 // 元のサイトと見分けるため、タブの名前と見出しに「改良版」を付ける
-document.title = "Gogma Seed Finder 改良版";
+document.title = "GSF-Claude";
 {
   const heroTitle = document.querySelector(".hero h1");
   if (heroTitle && !heroTitle.querySelector(".fork-badge")) {
